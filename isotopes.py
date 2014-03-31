@@ -3,13 +3,14 @@
 """
 isotopes.py
 
-adapted from an example by FX Coudert and from
+adapted from 
 Kubinyi, H.
 Calculation of isotope distributions in mass spectrometry. A trivial solution for a non-trivial problem.
 Anal Chim Acta 247, 107–119 (1991).
 
-Created by DELSUC Marc-André on 2014-03-28.
-Copyright (c) 2014 IGBMC. All rights reserved.
+First version by FX Coudert,
+Python rewrite by DELSUC Marc-André on 2014-03-28.
+Copyright (c) 2014 CNRS. All rights reserved.
 """
 
 import re
