@@ -273,7 +273,7 @@ class Distribution(object):
         while self.distrib[-1].proba < self.threshold:      # high
             self.distrib.pop()
 
-def draw(D, width=0.2, charge=1):
+def draw(D, title=None, width=0.2, charge=1):
     "quick draw a given distribution"
     import numpy as np
     import matplotlib.pyplot as plt
@@ -291,25 +291,33 @@ def draw(D, width=0.2, charge=1):
     plt.xlabel("$m/z$")
     plt.ylabel("intensity")
     plt.axis(ymin=-5, ymax=105)
+    if title:
+        plt.title(title)
     plt.show()
-    
-if __name__ == '__main__':
-    (elem_t, name_t, isotope_t ) = load_elements()
-#    print_t()
-    test = "CH4 C2H6 CH3COOH PO4"
-#    test = "K23 I22"
-#    test = "W5"
-    test = "C254 H377 N65 O75 S6"   # insuline
-#    test = "C1185 H1850 N282 0339 S18"  # cytochrome oxydase
-    test2 = "RPKPQQFFGLM"   # substance P
-    test2 = "KELCKAVSVSM"
-#    test2 = "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY"
-    form = parse_pep(test2)
-    addformula(form, form)
-#    form = parse_seq(test)
+
+def test1():
+    " example with elemental formula"
+    #   test = "CHCl3"
+    test = "K23 I22"
+    #   test = "W5"
+    #test = "C254 H377 N65 O75 S6"   # insuline
+    #    test = "C1185 H1850 N282 0339 S18"  # cytochrome oxydase
+    form = parse_seq(test)
     printformula( form)
     print monoisotop(form), average(form)
-    D = Distribution(form)
+    return Distribution(form)
+
+def test2():
+    " example with protein formula"
+    test = "RPKPQQFFGLMn"   # substance P
+    form = parse_pep(test)
+    printformula( form)
+    print monoisotop(form), average(form)
+    return Distribution(form)
+
+if __name__ == '__main__':
+    (elem_t, name_t, isotope_t ) = load_elements()
+    D = test1()
     print "By mass\n",D,"\n"
     D.sort_by_intens()
     print "By intensities\n",D,"\n"
