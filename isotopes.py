@@ -126,53 +126,81 @@ def addformula(f1,f2):
         f1[i] += f2[i]
     
 def parse_pep(st):
-    "compute the formula of a peptide/protein given par one letter code"
+    """
+    compute the formula of a peptide/protein given par one letter code
+    formula = parse_pep("ACDEY*GH")     # e.g.
+    letter code is standard 1 letter code for amino-acides + additional codes for PTM
+    * posphrylation
+    a acetylation
+    m methoxylation
+    n amidation
+    - deamidation
+    h hydroxylation
+    o oxydation
+    
+    """
     formula = parse_seq("NH2")   # starts with H2N-...
     cterm = parse_seq("COOH")   # end with ..-COOH
     pbound = parse_seq("CO NH")
-    H2O = parse_seq("H2O")
+    AA = "ACDEFGHIKLMNPQRSTVWY"
+    PTM = "*amn-ho"
     for ires in range(len(st)):
         res = st[ires]
-        if res == "A":          f = parse_seq("CH CH3")
-        elif res == "C":        f = parse_seq("CH CH2 SH")
-        elif res == "D":        f = parse_seq("CH CH2 COOH")
-        elif res == "E":        f = parse_seq("CH CH2 CH2 COOH")
-        elif res == "F":        f = parse_seq("CH CH2 C6H5")
-        elif res == "G":        f = parse_seq("CH2")
-        elif res == "H":        f = parse_seq("CH CH2 C3 N2 H3")
-        elif res == "I":        f = parse_seq("CH CH CH3 CH2 CH3")
-        elif res == "K":        f = parse_seq("CH CH2 CH2 CH2 CH2 NH2")
-        elif res == "L":        f = parse_seq("CH CH2 CH CH3 CH3")
-        elif res == "M":        f = parse_seq("CH CH2 CH2 S CH3")
-        elif res == "N":        f = parse_seq("CH CH2 CONH2")
-        elif res == "P":        f = parse_seq("C CH2 CH2 CH2")
-        elif res == "Q":        f = parse_seq("CH CH2 CH2 CONH2")
-        elif res == "R":        f = parse_seq("CH CH2 CH2 CH2 N C NH2 NH2")
-        elif res == "S":        f = parse_seq("CH CH2 OH")
-        elif res == "T":        f = parse_seq("CH CHOH CH3")
-        elif res == "V":        f = parse_seq("CH CH CH3 CH3")
-        elif res == "W":        f = parse_seq("CH CH2 C8 N H6")
-        elif res == "Y":        f = parse_seq("CH CH2 C6H4OH")
-        elif res == "*":    # star notes phosphate
-            f = parse_seq("PO4")
-            for i in H2O.keys():
-                formula[i] -= H2O[i]    # remove one H2O
-        elif res == "a":    # c notes acetate
-            f = parse_seq("COOCH3")
-            for i in H2O.keys():
-                formula[i] -= H2O[i]    # remove one H2O
-        elif res == "n":    # n notes amide in Cter
-            f = parse_seq("NH2")
-            for i in H2O.keys():
-                formula[i] -= H2O[i]    # remove one H2O
+        if res in AA:
+            if res == "A":          f = parse_seq("CH CH3")
+            elif res == "C":        f = parse_seq("CH CH2 S H")
+            elif res == "D":        f = parse_seq("CH CH2 COOH")
+            elif res == "E":        f = parse_seq("CH CH2 CH2 COOH")
+            elif res == "F":        f = parse_seq("CH CH2 C6H5")
+            elif res == "G":        f = parse_seq("CH2")
+            elif res == "H":        f = parse_seq("CH CH2 C3 N2 H3")
+            elif res == "I":        f = parse_seq("CH CH CH3 CH2 CH3")
+            elif res == "K":        f = parse_seq("CH CH2 CH2 CH2 CH2 NH2")
+            elif res == "L":        f = parse_seq("CH CH2 CH CH3 CH3")
+            elif res == "M":        f = parse_seq("CH CH2 CH2 S CH3")
+            elif res == "N":        f = parse_seq("CH CH2 CONH2")
+            elif res == "P":        f = parse_seq("C CH2 CH2 CH2")
+            elif res == "Q":        f = parse_seq("CH CH2 CH2 CONH2")
+            elif res == "R":        f = parse_seq("CH CH2 CH2 CH2 N C NH2 NH2")
+            elif res == "S":        f = parse_seq("CH CH2 OH")
+            elif res == "T":        f = parse_seq("CH CHOH CH3")
+            elif res == "V":        f = parse_seq("CH CH CH3 CH3")
+            elif res == "W":        f = parse_seq("CH CH2 C8 N H6")
+            elif res == "Y":        f = parse_seq("CH CH2 C6H4OH")
+            addformula(formula, f)
+        # special codes
+        elif res in PTM:
+            if res == "*":    # star notes phosphate
+                f = parse_seq("PO4")
+                to_rem = parse_seq("OH")
+            elif res == "a":    # c notes acetate
+                f = parse_seq("COOCH3")
+                to_rem = parse_seq("H2O")
+            elif res == "n":    # amidation (in Cter)
+                f = parse_seq("NH2")
+                to_rem = parse_seq("OH")
+            elif res == "-":    # deamination
+                f = parse_seq("OH")
+                to_rem = parse_seq('NH2')
+            elif res == "h":    # hydroxylation (eg Prolines)
+                f = parse_seq("O")
+                to_rem = {}
+            elif res == "o":    # oxydation (eg methionine)
+                f = parse_seq("O")
+                to_rem = {}
+            elif res == "m":    # methylation
+                f = parse_seq("CH2")
+                to_rem = {}
+            # remove 
+            for i in to_rem.keys():
+                formula[i] -= to_rem[i]
+            addformula(formula, f)
         else:
             raise(Exception("Unknown residue code"))
-        addformula(formula, f)
-        if not res in ('*','c','n'):    # these are not a peptide bound
-            if ires<len(st)-1:
+        # then add pbound
+        if res in AA: # add pnound only if AA
+            if [r for r in st[ires+1:] if r in AA ]:    # and if there is another AA next on st
                 addformula(formula, pbound)
-    # for i in pbound.keys():
-    #     formula[i] -= pbound[i]    # remove last one
     addformula(formula,cterm)
     return formula
 
@@ -310,16 +338,29 @@ def test1():
 
 def test2():
     " example with protein formula"
-    test = "RPKPQQFFGLMn"   # substance P
+    test = "RPKPQQFFGCLM"   # substance P
+#    test = "MADEAALALQPGGSPSAAGADREAASSPAGEPLRKRPRRDGPGLERSPGEPGGAAPEREVPAAARGCPGAAAAALWREAEAEAAAAGGEQEAQATAAAGEGDNGPGLQGPSREPPLADNLYDEDDDDEGEEEEEAAAAAIGYRDNLLFGDEIITNGFHSCESDEEDRASHASSSDWTPRPRIGPYTFVQQHLMIGTDPRTILKDLLPETIPPPELDDMTLWQIVINILSEPPKRKKRKDI"
     form = parse_pep(test)
     printformula( form)
     print monoisotop(form), average(form)
     return Distribution(form)
 
+def test3():
+    test = "RPKPQQFFGLM"   # substance P
+    form = parse_pep(test)
+    printformula( form)
+    m1 = monoisotop(form)#, average(form)
+    for test in ("mmRPKPQQFFGLM","RPKPmmQQFFGLM","RPKPQQFFGLMmm"):
+        form = parse_pep(test)
+        printformula( form)
+        m2 = monoisotop(form)#, average(form)
+        print m1, m2, m2-m1
+    
 if __name__ == '__main__':
     (elem_t, name_t, isotope_t ) = load_elements()
-    D = test1()
+#    test3()
+    D = test2()
     print "By mass\n",D,"\n"
-    D.sort_by_intens()
-    print "By intensities\n",D,"\n"
+    # D.sort_by_intens()
+    # print "By intensities\n",D,"\n"
     draw(D)
