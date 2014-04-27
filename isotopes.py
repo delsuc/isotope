@@ -18,7 +18,31 @@ from collections import defaultdict, namedtuple
 import copy
 global  elem_t, name_t, isotope_t
 THRESHOLD = 1E-8
+import matplotlib.pyplot as plt
+import numpy as np
 
+
+
+class Formula( defaultdict ):
+    """
+    a micro class for chemical formula entries
+    hold a  a dictionnary {"elem":number} (with default value of zero)
+    "CH3 CH2 OH" is coded as  ["C":2, "O":1, "H":6]
+    """
+    def __init__(self,*arg):
+        defaultdict.__init__(self,int)
+    def __repr__(self):
+        return printformula(self)
+    def monoisotop(self):
+        "return monoisotopique mass"
+        return monoisotop(self)
+    def average(self):
+        "return average mass"
+        return average(self)
+    def distribution(self):
+        "return the mass distribution as a Distribution object"
+        return Distribution(self)
+    
 class Isotope(namedtuple("Isotope", "element isotop, mass, abund")):
     "a micro class for isotopes entries"
     pass
@@ -99,7 +123,7 @@ def parse_seq(st):
     "CCl4" returns  ["C":1, "Cl":4]
     """
     # to rewritten recursive as a list processing to accept ()
-    formula = defaultdict(int)
+    formula = Formula()
     for i in range(len(st)):   # through the string
 #        print i,st[i:i+2]
         if st[i] == " ":    # skip blanks
@@ -129,7 +153,7 @@ def parse_pep(st):
     """
     compute the formula of a peptide/protein given par one letter code
     formula = parse_pep("ACDEY*GH")     # e.g.
-    letter code is standard 1 letter code for amino-acides + additional codes for PTM
+    letter code is standard 1 letter code for amino-acides + additional codes for Post Translational Modifications (PTM)
     * posphrylation
     a acetylation
     m methoxylation
@@ -137,7 +161,7 @@ def parse_pep(st):
     - deamidation
     h hydroxylation
     o oxydation
-    
+    does not verify the chemical coherence of the PTM !
     """
     formula = parse_seq("NH2")   # starts with H2N-...
     cterm = parse_seq("COOH")   # end with ..-COOH
@@ -146,7 +170,9 @@ def parse_pep(st):
     PTM = "*amn-ho"
     for ires in range(len(st)):
         res = st[ires]
-        if res in AA:
+        if res == " ":
+            continue
+        elif res in AA:
             if res == "A":          f = parse_seq("CH CH3")
             elif res == "C":        f = parse_seq("CH CH2 S H")
             elif res == "D":        f = parse_seq("CH CH2 COOH")
@@ -198,7 +224,7 @@ def parse_pep(st):
         else:
             raise(Exception("Unknown residue code"))
         # then add pbound
-        if res in AA: # add pnound only if AA
+        if res in AA: # add pbound only if AA
             if [r for r in st[ires+1:] if r in AA ]:    # and if there is another AA next on st
                 addformula(formula, pbound)
     addformula(formula,cterm)
@@ -208,8 +234,12 @@ def printformula(formula):
     "nice print of a formula"
     st =""
     for k in sorted(formula.keys()):
-        st += "%s_%d "%(k, formula[k])
-    print st
+        if formula[k] >1:
+            sto = "_%d"%(formula[k])
+        else:
+            sto = ""
+        st += "%s%s "%(k, sto)
+    return st
 def monoisotop(formula):
     "returns monoisotopic mass from a formula"
     mass = 0.0
@@ -233,6 +263,7 @@ class Distribution(object):
     """
     handle and compute isotopic distribution
     
+    stored in self.distrib as a list of Ion() : [Ion(),...]
     """
     def __init__(self, formula=None, isotope=None):    # init either from a formula or a isotope
         self.threshold = THRESHOLD
@@ -262,14 +293,13 @@ class Distribution(object):
         self.distrib.sort(key=lambda ion: ion.mass)
 
     def combine(self,dist2):
-        """combine two Distribution"""
+        """combine two Distributions"""
         d = [Ion(mass=0.0, proba=0.0) for i in range((self.len()+dist2.len()-1)) ]
         for i in range(self.len()):
             for j in range(dist2.len()):
                 d[i+j].proba += self.distrib[i].proba*dist2.distrib[j].proba
         for i in range(self.len()):
             for j in range(dist2.len()):
-#      res->p[i+j].mass += dist1.p[i].prob * dist2.p[j].prob * (dist1.p[i].mass + dist2.p[j].mass);
                 d[i+j].mass += (self.distrib[i].mass + dist2.distrib[j].mass) \
                                 * self.distrib[i].proba * dist2.distrib[j].proba
         for ion in d:
@@ -282,7 +312,7 @@ class Distribution(object):
     def compute(self, formula):
         """compute a Distribution from a formula returned by parse_seq()"""
         for el in formula.keys():
-            iso =  isotope_t[name_t[el]]
+            iso =  isotope_t[ name_t[el] ]
             d = Distribution(isotope=iso)
             dd = Distribution()
             for i in range(formula[el]):
@@ -301,66 +331,108 @@ class Distribution(object):
             self.distrib.pop(0)
         while self.distrib[-1].proba < self.threshold:      # high
             self.distrib.pop()
+    #---------------- utilities --------------
+    def draw(self, title=None, width=0.2, charge=1, R=None):
+        "quick draw of distribution"
+        import numpy as np
+        if R:
+            width = 0.25*self.distrib[0].mass/R
+        self.sort_by_mass()
+        x = np.zeros(3*self.len()+2)
+        y = np.zeros(3*self.len()+2)
+        x[0] = self.distrib[0].mass/charge-5
+        x[-1] = self.distrib[-1].mass/charge+5
+        for i in range(self.len()):
+            x[1+3*i] =  (self.distrib[i].mass)/charge - width
+            x[2+3*i] =  (self.distrib[i].mass)/charge
+            y[2+3*i] =  100*self.distrib[i].proba
+            x[3+3*i] =  (self.distrib[i].mass)/charge + width
+        plt.plot(x,y)
+        plt.xlabel("$m/z$")
+        plt.ylabel("intensity")
+        plt.axis(ymin=-5, ymax=105)
+        if title:
+            plt.title(title)
 
-def draw(D, title=None, width=0.2, charge=1):
-    "quick draw a given distribution"
-    import numpy as np
-    import matplotlib.pyplot as plt
-    D.sort_by_mass()
-    x = np.zeros(3*D.len()+2)
-    y = np.zeros(3*D.len()+2)
-    x[0] = D.distrib[0].mass/charge-5
-    x[-1] = D.distrib[-1].mass/charge+5
-    for i in range(D.len()):
-        x[1+3*i] =  (D.distrib[i].mass)/charge - width
-        x[2+3*i] =  (D.distrib[i].mass)/charge
-        y[2+3*i] =  100*D.distrib[i].proba
-        x[3+3*i] =  (D.distrib[i].mass)/charge + width
-    plt.plot(x,y)
-    plt.xlabel("$m/z$")
-    plt.ylabel("intensity")
-    plt.axis(ymin=-5, ymax=105)
-    if title:
-        plt.title(title)
-    plt.show()
+    def draw_lowres(self, title=None, charge=1):
+        """
+        draw the low resolution peak
+        """
+        spl = self.enveloppe()
+        xenv = np.linspace(self.distrib[0].mass-5, self.distrib[-1].mass+5, 1000)
+        env = [100*spl(xi) for xi in xenv]
+        plt.plot(xenv/charge, env)
+        if title:
+            plt.title(title)
+
+    def enveloppe(self):
+        """
+        compute the smoothed enveloppe for a distribution
+        f = D.enveloppe()
+        returns a function f which computes the enveloppe on any x points : f(x)
+        """
+        from scipy.interpolate import UnivariateSpline
+        from scipy.optimize import newton
+        from functools import partial
+        m0 = self.distrib[0].mass
+        x = [m0-1]
+        y = [0]
+        x += [dd.mass for dd in self.distrib]
+        y += [dd.proba for dd in self.distrib]
+        x += [self.distrib[0].mass+5]
+        y += [0]
+        x = np.array(x)
+        y = np.array(y)
+        spl = UnivariateSpline(x, y, s=0)
+        deriv =  partial( spl, nu=1)
+        second = partial( spl, nu=2)
+        x0 = sum(x*y)/sum(y)        # average mass
+        # summit of curve is :  newton(deriv, x0, fprime=second)
+        return lambda x: max(0.0,spl(x)) if x>m0-1 else 0    # 
 
 def test1():
     " example with elemental formula"
-    #   test = "CHCl3"
-    test = "K23 I22"
+#    test = "C6H14"
+#    test = "K23 I22 S30"
     #   test = "W5"
-    #test = "C254 H377 N65 O75 S6"   # insuline
-    #    test = "C1185 H1850 N282 0339 S18"  # cytochrome oxydase
+    test = "C254 H377 N65 O75 S6"   # insuline
+    #    test = "C1185 H1850 N282 O339 S18"  # cytochrome oxydase
+    # test = "C769 H1212 N210 O218 S2 H20"  # myoglobine 20+
     form = parse_seq(test)
-    printformula( form)
-    print monoisotop(form), average(form)
-    return Distribution(form)
+    print "insuline", printformula( form), monoisotop(form), average(form)
 
 def test2():
     " example with protein formula"
-    test = "RPKPQQFFGCLM"   # substance P
-#    test = "MADEAALALQPGGSPSAAGADREAASSPAGEPLRKRPRRDGPGLERSPGEPGGAAPEREVPAAARGCPGAAAAALWREAEAEAAAAGGEQEAQATAAAGEGDNGPGLQGPSREPPLADNLYDEDDDDEGEEEEEAAAAAIGYRDNLLFGDEIITNGFHSCESDEEDRASHASSSDWTPRPRIGPYTFVQQHLMIGTDPRTILKDLLPETIPPPELDDMTLWQIVINILSEPPKRKKRKDI"
+#    test = "RPKPQQFFGCLMn"   # substance P
+#    test = "MKVLWAALLV TFLAGCQAKV EQAVETEPEP ELRQQTEWQS GQRWELALGR FWDYLRWVQT LSEQVQEELL SSQVTQELRA LMDETMKELK AYKSELEEQL TPVAEETRAR LSKELQAAQA RLGADMEDVC GRLVQYRGEV QAMLGQSTEE LRVRLASHLR KLRKRLLRDA DDLQKRLAVY QAGAREGAER GLSAIRERLG PLVEQGRVRA ATVGSLAGQP LQERAQAWGE RLRARMEEMG SRTRDRLDEV KEQVAEVRAK LEEQAQQIRL QAEAFQARLK SWFEPLVEDM QRQWAGLVEK VQAAVGTSAA PVPSDNH" # ApoE
+    test = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
     form = parse_pep(test)
-    printformula( form)
+#    addformula(form, parse_seq("H12")) # if you want o compute [M+H_12]12+
+    
+    print "Ubiquitine",printformula( form)
     print monoisotop(form), average(form)
     return Distribution(form)
 
-def test3():
-    test = "RPKPQQFFGLM"   # substance P
-    form = parse_pep(test)
-    printformula( form)
-    m1 = monoisotop(form)#, average(form)
-    for test in ("mmRPKPQQFFGLM","RPKPmmQQFFGLM","RPKPQQFFGLMmm"):
-        form = parse_pep(test)
-        printformula( form)
-        m2 = monoisotop(form)#, average(form)
-        print m1, m2, m2-m1
-    
+def insu():
+    cc = parse_pep("GIVEQCCASVCSLYQLENYCN")
+    cd = parse_pep("FVNQHLCGSHLVEALYLVCGERGFFYTPKA")
+    print "Chain, C", monoisotop(cc)
+    print "Chain, D", monoisotop(cd)
+    insuline = copy.deepcopy(cc)
+    addformula(insuline,cd)   # add both chains
+    insuline["H"] -= 6      # remove 6 H for 3 disulfides
+    print "insuline", monoisotop(insuline)
+    Ins = Distribution(insuline)
+    Ins.draw(width=0.1,title="Insuline")
+
+(elem_t, name_t, isotope_t ) = load_elements()
 if __name__ == '__main__':
-    (elem_t, name_t, isotope_t ) = load_elements()
-#    test3()
+    test1()
     D = test2()
     print "By mass\n",D,"\n"
-    # D.sort_by_intens()
-    # print "By intensities\n",D,"\n"
-    draw(D)
+    D.draw(charge=12, R=1E5, title="Ubiquitine 12+")
+    D.draw_lowres(charge=12)
+    plt.figure()
+    insu()
+    plt.show()
+    
