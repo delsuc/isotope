@@ -14,6 +14,7 @@ Copyright (c) 2014 CNRS. All rights reserved.
 """
 
 import re
+import os
 from collections import defaultdict, namedtuple
 import copy
 global  elem_t, name_t, isotope_t
@@ -43,9 +44,18 @@ class Formula( defaultdict ):
         "return the mass distribution as a Distribution object"
         return Distribution(self)
     
-class Isotope(namedtuple("Isotope", "element isotop, mass, abund")):
+# class Isotope(namedtuple("Isotope", "element isotop mass abund")):
+#     "a micro class for isotopes entries"
+#     pass
+class Isotope(object):
     "a micro class for isotopes entries"
-    pass
+    def __init__(self, element, isotop, mass, abund):
+        self.element = element
+        self.isotop = isotop
+        self.mass = mass
+        self.abund = abund
+    def __str__(self):
+        return "Isotope(element=%s, isotop=%s, mass=%s, abund=%s)"%(self.element, self.isotop, self.mass, self.abund)
 
 class Ion(object):      #as if Ion = namedlist("Ion", "mass, proba", verbose=False)
     """
@@ -58,7 +68,7 @@ class Ion(object):      #as if Ion = namedlist("Ion", "mass, proba", verbose=Fal
     def __repr__(self):
         return "%f  %.10f"%(self.mass, 100*self.proba)
 
-def load_elements(filename="elements.asc"):
+def load_elements(filename=None):
     """
     load the nist element file into dictionnaries
     ...
@@ -69,6 +79,8 @@ def load_elements(filename="elements.asc"):
             13   13.0033548378(10)  0.0107(8)   
             14   14.003241989(4)                
     ...
+    loads from filename, if empty, loads elements.asc located next to the source prgm.
+
     """
     #-------------------
     def readval(st):
@@ -79,6 +91,10 @@ def load_elements(filename="elements.asc"):
         except ValueError:  # typically radioactive only elemt
             val = 0.0
         return val
+    #-------------
+    # if filename empty, 
+    if filename == None:
+        filename = os.path.join(os.path.dirname(__file__),"elements.asc")
     isotope_t = defaultdict(list)     # a dict by element_number of a list of isotopes data
     name_t = {}                     # dict by name of element_number
     with open(filename,'r') as F:
@@ -109,6 +125,21 @@ def load_elements(filename="elements.asc"):
     elem_t = dict(zip(name_t.values(), name_t.keys()))      # dict by element_number of name
     return (elem_t, name_t, isotope_t )
 
+def enrich(element="C",isotop=13, ratio=1.0):
+    """modifies element abundance
+    default is C13 at 100%
+    """
+    k = name_t[element]
+    for i in isotope_t[k]:  # find it
+        if i.isotop == isotop:
+            prev = i.abund
+    for i in isotope_t[k]:  # modify it
+        if i.isotop == isotop:
+            i.abund = ratio
+        else:
+            i.abund = i.abund*(1-ratio)/(1-prev)
+        print "    ", i
+    
 def print_t():
     " print out the table read by load_elements()"
     for k in isotope_t.keys():
@@ -167,7 +198,7 @@ def parse_pep(st):
     cterm = parse_seq("COOH")   # end with ..-COOH
     pbound = parse_seq("CO NH")
     AA = "ACDEFGHIKLMNPQRSTVWY"
-    PTM = "*amn-ho"
+    PTM = "*amn-ho+"
     for ires in range(len(st)):
         res = st[ires]
         if res == " ":
@@ -210,6 +241,9 @@ def parse_pep(st):
                 to_rem = parse_seq('NH2')
             elif res == "h":    # hydroxylation (eg Prolines)
                 f = parse_seq("O")
+                to_rem = {}
+            elif res == "+":    # protonation
+                f = parse_seq("H")
                 to_rem = {}
             elif res == "o":    # oxydation (eg methionine)
                 f = parse_seq("O")
@@ -424,7 +458,8 @@ def insu():
     print "insuline", monoisotop(insuline)
     Ins = Distribution(insuline)
     Ins.draw(width=0.1,title="Insuline")
-
+    
+# load table at import
 (elem_t, name_t, isotope_t ) = load_elements()
 if __name__ == '__main__':
     test1()
