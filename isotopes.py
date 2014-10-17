@@ -48,7 +48,15 @@ class Formula( defaultdict ):
 #     "a micro class for isotopes entries"
 #     pass
 class Isotope(object):
-    "a micro class for isotopes entries"
+    """
+    a micro class for isotopes entries - 4 attributes
+        e.g. 
+        self.element = 6
+        self.isotop = 12
+        self.mass = 12.0
+        self.abund = 0.9893
+
+    """
     def __init__(self, element, isotop, mass, abund):
         self.element = element
         self.isotop = isotop
@@ -81,6 +89,12 @@ def load_elements(filename=None):
     ...
     loads from filename, if empty, loads elements.asc located next to the source prgm.
 
+
+    returns (elem_t, name_t, isotope_t )
+    where
+    elem_t : {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C',...   correspondance   Z / name
+    name_t : {'H': 1,'He': 2,'Li': 3, ... is the reverse table name /Z 
+    isotope_t : {1: (list, of, Isotope_objects), 2: ...    is the isotopic table
     """
     #-------------------
     def readval(st):
@@ -126,8 +140,10 @@ def load_elements(filename=None):
     return (elem_t, name_t, isotope_t )
 
 def enrich(element="C",isotop=13, ratio=1.0):
-    """modifies element abundance
-    default is C13 at 100%
+    """
+    modifies element abundance by modifying the internal isotopic table
+
+    enrich(element="C",isotop=13, ratio=0.95)  indicates a 95% 13C enrichment
     """
     k = name_t[element]
     for i in isotope_t[k]:  # find it
@@ -148,7 +164,7 @@ def print_t():
             print "    ", i
 
 
-def parse_seq(st):
+def parse_formula(st):
     """
     parse a raw formula "st" to a list of atom and stoechio
     "CCl4" returns  ["C":1, "Cl":4]
@@ -180,10 +196,10 @@ def addformula(f1,f2):
     for i in f2.keys():
         f1[i] += f2[i]
     
-def parse_pep(st):
+def parse_peptide(st):
     """
     compute the formula of a peptide/protein given par one letter code
-    formula = parse_pep("ACDEY*GH")     # e.g.
+    formula = parse_peptide("ACDEY*GH")     # e.g.
     letter code is standard 1 letter code for amino-acides + additional codes for Post Translational Modifications (PTM)
     * posphrylation
     a acetylation
@@ -194,9 +210,9 @@ def parse_pep(st):
     o oxydation
     does not verify the chemical coherence of the PTM !
     """
-    formula = parse_seq("NH2")   # starts with H2N-...
-    cterm = parse_seq("COOH")   # end with ..-COOH
-    pbound = parse_seq("CO NH")
+    formula = parse_formula("NH2")   # starts with H2N-...
+    cterm = parse_formula("COOH")   # end with ..-COOH
+    pbound = parse_formula("CO NH")
     AA = "ACDEFGHIKLMNPQRSTVWY"
     PTM = "*amn-ho+"
     for ires in range(len(st)):
@@ -204,52 +220,52 @@ def parse_pep(st):
         if res == " ":
             continue
         elif res in AA:
-            if res == "A":          f = parse_seq("CH CH3")
-            elif res == "C":        f = parse_seq("CH CH2 S H")
-            elif res == "D":        f = parse_seq("CH CH2 COOH")
-            elif res == "E":        f = parse_seq("CH CH2 CH2 COOH")
-            elif res == "F":        f = parse_seq("CH CH2 C6H5")
-            elif res == "G":        f = parse_seq("CH2")
-            elif res == "H":        f = parse_seq("CH CH2 C3 N2 H3")
-            elif res == "I":        f = parse_seq("CH CH CH3 CH2 CH3")
-            elif res == "K":        f = parse_seq("CH CH2 CH2 CH2 CH2 NH2")
-            elif res == "L":        f = parse_seq("CH CH2 CH CH3 CH3")
-            elif res == "M":        f = parse_seq("CH CH2 CH2 S CH3")
-            elif res == "N":        f = parse_seq("CH CH2 CONH2")
-            elif res == "P":        f = parse_seq("C CH2 CH2 CH2")
-            elif res == "Q":        f = parse_seq("CH CH2 CH2 CONH2")
-            elif res == "R":        f = parse_seq("CH CH2 CH2 CH2 N C NH2 NH2")
-            elif res == "S":        f = parse_seq("CH CH2 OH")
-            elif res == "T":        f = parse_seq("CH CHOH CH3")
-            elif res == "V":        f = parse_seq("CH CH CH3 CH3")
-            elif res == "W":        f = parse_seq("CH CH2 C8 N H6")
-            elif res == "Y":        f = parse_seq("CH CH2 C6H4OH")
+            if res == "A":          f = parse_formula("CH CH3")
+            elif res == "C":        f = parse_formula("CH CH2 S H")
+            elif res == "D":        f = parse_formula("CH CH2 COOH")
+            elif res == "E":        f = parse_formula("CH CH2 CH2 COOH")
+            elif res == "F":        f = parse_formula("CH CH2 C6H5")
+            elif res == "G":        f = parse_formula("CH2")
+            elif res == "H":        f = parse_formula("CH CH2 C3 N2 H3")
+            elif res == "I":        f = parse_formula("CH CH CH3 CH2 CH3")
+            elif res == "K":        f = parse_formula("CH CH2 CH2 CH2 CH2 NH2")
+            elif res == "L":        f = parse_formula("CH CH2 CH CH3 CH3")
+            elif res == "M":        f = parse_formula("CH CH2 CH2 S CH3")
+            elif res == "N":        f = parse_formula("CH CH2 CONH2")
+            elif res == "P":        f = parse_formula("C CH2 CH2 CH2")
+            elif res == "Q":        f = parse_formula("CH CH2 CH2 CONH2")
+            elif res == "R":        f = parse_formula("CH CH2 CH2 CH2 N C NH2 NH2")
+            elif res == "S":        f = parse_formula("CH CH2 OH")
+            elif res == "T":        f = parse_formula("CH CHOH CH3")
+            elif res == "V":        f = parse_formula("CH CH CH3 CH3")
+            elif res == "W":        f = parse_formula("CH CH2 C8 N H6")
+            elif res == "Y":        f = parse_formula("CH CH2 C6H4OH")
             addformula(formula, f)
         # special codes
         elif res in PTM:
             if res == "*":    # star notes phosphate
-                f = parse_seq("PO4")
-                to_rem = parse_seq("OH")
+                f = parse_formula("PO4")
+                to_rem = parse_formula("OH")
             elif res == "a":    # c notes acetate
-                f = parse_seq("COOCH3")
-                to_rem = parse_seq("H2O")
+                f = parse_formula("COOCH3")
+                to_rem = parse_formula("H2O")
             elif res == "n":    # amidation (in Cter)
-                f = parse_seq("NH2")
-                to_rem = parse_seq("OH")
+                f = parse_formula("NH2")
+                to_rem = parse_formula("OH")
             elif res == "-":    # deamination
-                f = parse_seq("OH")
-                to_rem = parse_seq('NH2')
+                f = parse_formula("OH")
+                to_rem = parse_formula('NH2')
             elif res == "h":    # hydroxylation (eg Prolines)
-                f = parse_seq("O")
+                f = parse_formula("O")
                 to_rem = {}
             elif res == "+":    # protonation
-                f = parse_seq("H")
+                f = parse_formula("H")
                 to_rem = {}
             elif res == "o":    # oxydation (eg methionine)
-                f = parse_seq("O")
+                f = parse_formula("O")
                 to_rem = {}
             elif res == "m":    # methylation
-                f = parse_seq("CH2")
+                f = parse_formula("CH2")
                 to_rem = {}
             # remove 
             for i in to_rem.keys():
@@ -344,7 +360,7 @@ class Distribution(object):
         self.prune()
 
     def compute(self, formula):
-        """compute a Distribution from a formula returned by parse_seq()"""
+        """compute a Distribution from a formula returned by parse_formula()"""
         for el in formula.keys():
             iso =  isotope_t[ name_t[el] ]
             d = Distribution(isotope=iso)
@@ -432,7 +448,7 @@ def test1():
     test = "C254 H377 N65 O75 S6"   # insuline
     #    test = "C1185 H1850 N282 O339 S18"  # cytochrome oxydase
     # test = "C769 H1212 N210 O218 S2 H20"  # myoglobine 20+
-    form = parse_seq(test)
+    form = parse_formula(test)
     print "insuline", printformula( form), monoisotop(form), average(form)
 
 def test2():
@@ -440,16 +456,16 @@ def test2():
 #    test = "RPKPQQFFGCLMn"   # substance P
 #    test = "MKVLWAALLV TFLAGCQAKV EQAVETEPEP ELRQQTEWQS GQRWELALGR FWDYLRWVQT LSEQVQEELL SSQVTQELRA LMDETMKELK AYKSELEEQL TPVAEETRAR LSKELQAAQA RLGADMEDVC GRLVQYRGEV QAMLGQSTEE LRVRLASHLR KLRKRLLRDA DDLQKRLAVY QAGAREGAER GLSAIRERLG PLVEQGRVRA ATVGSLAGQP LQERAQAWGE RLRARMEEMG SRTRDRLDEV KEQVAEVRAK LEEQAQQIRL QAEAFQARLK SWFEPLVEDM QRQWAGLVEK VQAAVGTSAA PVPSDNH" # ApoE
     test = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
-    form = parse_pep(test)
-#    addformula(form, parse_seq("H12")) # if you want o compute [M+H_12]12+
+    form = parse_peptide(test)
+#    addformula(form, parse_formula("H12")) # if you want o compute [M+H_12]12+
     
     print "Ubiquitine",printformula( form)
     print monoisotop(form), average(form)
     return Distribution(form)
 
 def insu():
-    cc = parse_pep("GIVEQCCASVCSLYQLENYCN")
-    cd = parse_pep("FVNQHLCGSHLVEALYLVCGERGFFYTPKA")
+    cc = parse_peptide("GIVEQCCASVCSLYQLENYCN")
+    cd = parse_peptide("FVNQHLCGSHLVEALYLVCGERGFFYTPKA")
     print "Chain, C", monoisotop(cc)
     print "Chain, D", monoisotop(cd)
     insuline = copy.deepcopy(cc)
@@ -462,7 +478,6 @@ def insu():
 # load table at import
 (elem_t, name_t, isotope_t ) = load_elements()
 if __name__ == '__main__':
-    test1()
     D = test2()
     print "By mass\n",D,"\n"
     D.draw(charge=12, R=1E5, title="Ubiquitine 12+")
