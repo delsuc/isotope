@@ -195,20 +195,28 @@ def addformula(f1,f2):
     """add the content of f2 to the content of f1"""
     for i in f2.keys():
         f1[i] += f2[i]
-    
+
+def rmformula(f1,f2):
+    """remove the content of f2 to the content of f1"""
+    for i in f2.keys():
+        f1[i] -= f2[i]
+        if f1[i]<0 : raise Exception("Negative atom count !")
+
 def parse_peptide(st):
     """
     compute the formula of a peptide/protein given par one letter code
     formula = parse_peptide("ACDEY*GH")     # e.g.
     letter code is standard 1 letter code for amino-acides + additional codes for Post Translational Modifications (PTM)
-    * posphrylation
+    * posphorylation
     a acetylation
-    m methoxylation
     n amidation
     - deamidation
     h hydroxylation
     o oxydation
+    + protonation
+    m methoxylation
     does not verify the chemical coherence of the PTM !
+    
     """
     formula = parse_formula("NH2")   # starts with H2N-...
     cterm = parse_formula("COOH")   # end with ..-COOH
@@ -267,10 +275,11 @@ def parse_peptide(st):
             elif res == "m":    # methylation
                 f = parse_formula("CH2")
                 to_rem = {}
-            # remove 
-            for i in to_rem.keys():
-                formula[i] -= to_rem[i]
             addformula(formula, f)
+            # remove 
+            rmformula(formula, to_rem)
+            # for i in to_rem.keys():
+            #     formula[i] -= to_rem[i]
         else:
             raise(Exception("Unknown residue code"))
         # then add pbound
