@@ -1,59 +1,79 @@
+#!/usr/bin/env python
+# encoding: utf-8
+"""Tests with unittest"""
 import unittest
-import numpy.testing as nt
+#~ import numpy.testing as nt
+from numpy.testing import assert_equal
 
 import analyseperf
 
 #~ lauch all test "python -m unittest discover" 
 
 class TestAnalysePerf(unittest.TestCase):
+    """This class is used to do unit tests on the analyser
+    test has done in the alphabetical order"""
     
     def setUp(self):
+        """To do before each tests"""
         self.analyse = analyseperf.Analyser()
     
-    def tearDown(self): #do the setup to each test
+    def tearDown(self):
+        """Clear after each tests"""
         pass
     
-    def test_init(self):
+    def test_00_init(self):
+        """test the init"""
         self.assertGreater(len(self.analyse.listofsize), 0)
         
-    def test_01_generateSequence(self):
-        self.analyse.generateSequence(20)
-        nt.assert_equal(len(self.analyse.seq), 20)
+    def test_01_generate_sequence(self):
+        """test the sequence"""
+        self.analyse.generate_sequence(20)
+        assert_equal(len(self.analyse.seq), 20)
     
-    def test_02_analyseParsePeptide(self):
-        self.analyse.analyseParsePeptide()
-        nt.assert_equal(len(self.analyse.ppeptide_time),len(self.analyse.listofsize))
+    def test_02_analyse_parse_peptide(self):
+        """test the analyse_parse_peptide"""
+        self.analyse.analyse_parse_peptide()
+        assert_equal(len(self.analyse.ppeptide_time),\
+        len(self.analyse.listofsize))
         for (x, y) in self.analyse.ppeptide_time:
             self.assertIsNotNone(x)
             self.assertIsNotNone(y)
-        nt.assert_equal(len(self.analyse.forms), len(self.analyse.listofsize))
+        assert_equal(len(self.analyse.forms),\
+        len(self.analyse.listofsize))
     
-    def test_03_analyseMonoisotopic(self):
-        self.analyse.analyseParsePeptide()
-        self.analyse.analyseMonoisotopic()
-        nt.assert_equal(len(self.analyse.monoisotop_time), len(self.analyse.listofsize))
+    def test_03_analyse_monoisotopic(self):
+        """test the analyse_monoisotopic"""
+        self.analyse.analyse_parse_peptide()
+        self.analyse.analyse_monoisotopic()
+        assert_equal(len(self.analyse.monoisotop_time),\
+         len(self.analyse.listofsize))
         for value in self.analyse.monoisotop_time:
             self.assertIsNotNone(value)
     
-    def test_03_analyseAverage(self):
-        self.analyse.analyseParsePeptide()
-        self.analyse.analyseAverage()
-        nt.assert_equal(len(self.analyse.average_time), len(self.analyse.listofsize))
+    def test_03_analyse_average(self):
+        """test the analyse_average"""
+        self.analyse.analyse_parse_peptide()
+        self.analyse.analyse_average()
+        assert_equal(len(self.analyse.average_time),\
+         len(self.analyse.listofsize))
         for value in self.analyse.average_time:
             self.assertIsNotNone(value)
     
-    def test_03_analyseDistribution(self):
-        self.analyse.analyseParsePeptide()
-        self.analyse.analyseDistribution()
-        nt.assert_equal(len(self.analyse.distribution_time), len(self.analyse.listofsize))
+    def test_03_analyse_distribution(self):
+        """test the analyse_distribution"""
+        self.analyse.analyse_parse_peptide()
+        self.analyse.analyse_distribution()
+        assert_equal(len(self.analyse.distribution_time),\
+         len(self.analyse.listofsize))
         for value in self.analyse.distribution_time:
             self.assertIsNotNone(value)
     
-    def test_03_getXY(self):
-        couple = [ (1, 1), (1, 1), (1, 1)]
-        (x,y) = self.analyse.getXY(couple)
-        nt.assert_equal(len(x), len(couple))
-        nt.assert_equal(len(y), len(couple))
+    def test_03_get_xy(self):
+        """test the get_xy"""
+        couple = [(1, 1), (1, 1), (1, 1)]
+        (x, y) = analyseperf.get_xy(couple)
+        assert_equal(len(x), len(couple))
+        assert_equal(len(y), len(couple))
         
 
 if __name__ == '__main__':
