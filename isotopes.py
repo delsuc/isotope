@@ -3,13 +3,35 @@
 """
 isotopes.py
 
+This module allows the precise computation of isotopic distributions, average mass, and monoisotopic masses
+of arbitrary chemical formula.
+Isotopic natural abundance can be changed with the enrich() function.
+
+The handy determination from peptide and protein primary sequences is provided.
+
+The possibility to draw the isotopic profil is also given.
+
+Typical use is :
+molecule = "K23 I22 S30"
+formula = parse_formula(molecule)   # formula object (in fact a dictionary)
+print "average mass", formula.average()
+print "monoisotopic mass", formula.monoisotop()
+distrib = formula.distribution()
+
 adapted from 
 Kubinyi, H.
 Calculation of isotope distributions in mass spectrometry. A trivial solution for a non-trivial problem.
-Anal Chim Acta 247, 107–119 (1991).
+Anal Chim Acta 247, 107-119 (1991).
 
-First version by FX Coudert,
-Python rewrite by DELSUC Marc-André on 2014-03-28.
+This module depends at import time on a isotope file to be present in the same directory
+by default called "elements.asc"
+
+It is a copy of the file found at
+NIST | Physical Measurement Laboratory | Physical Reference Data | Atomic Weights and Isotopic Compositions Main Page
+http://www.nist.gov/
+
+First version of algo by FX Coudert,
+Python rewrite by DELSUC Marc-Andre on 2014-03-28.
 Copyright (c) 2014 CNRS. All rights reserved.
 """
 
@@ -17,12 +39,13 @@ import re
 import os
 from collections import defaultdict, namedtuple
 import copy
+import unittest
+
 global  elem_t, name_t, isotope_t
 THRESHOLD = 1E-8
+
 import matplotlib.pyplot as plt
 import numpy as np
-
-
 
 class Formula( defaultdict ):
     """
@@ -192,12 +215,12 @@ def parse_formula(st):
     return formula
 
 def addformula(f1,f2):
-    """add the content of f2 to the content of f1"""
+    """add inplace the content of f2 to the content of f1"""
     for i in f2.keys():
         f1[i] += f2[i]
 
 def rmformula(f1,f2):
-    """remove the content of f2 to the content of f1"""
+    """remove inplace the content of f2 to the content of f1"""
     for i in f2.keys():
         f1[i] -= f2[i]
         if f1[i]<0 : raise Exception("Negative atom count !")
@@ -221,70 +244,55 @@ def parse_peptide(st):
     formula = parse_formula("NH2")   # starts with H2N-...
     cterm = parse_formula("COOH")   # end with ..-COOH
     pbound = parse_formula("CO NH")
-    AA = "ACDEFGHIKLMNPQRSTVWY"
-    PTM = "*amn-ho+"
+    AA={}
+    AA["A"] = parse_formula("CH CH3")
+    AA["C"] = parse_formula("CH CH2 S H")
+    AA["D"] = parse_formula("CH CH2 COOH")
+    AA["E"] = parse_formula("CH CH2 CH2 COOH")
+    AA["F"] = parse_formula("CH CH2 C6H5")
+    AA["G"] = parse_formula("CH2")
+    AA["H"] = parse_formula("CH CH2 C3 N2 H3")
+    AA["I"] = parse_formula("CH CH CH3 CH2 CH3")
+    AA["K"] = parse_formula("CH CH2 CH2 CH2 CH2 NH2")
+    AA["L"] = parse_formula("CH CH2 CH CH3 CH3")
+    AA["M"] = parse_formula("CH CH2 CH2 S CH3")
+    AA["N"] = parse_formula("CH CH2 CONH2")
+    AA["P"] = parse_formula("C CH2 CH2 CH2")
+    AA["Q"] = parse_formula("CH CH2 CH2 CONH2")
+    AA["R"] = parse_formula("CH CH2 CH2 CH2 N C NH2 NH2")
+    AA["S"] = parse_formula("CH CH2 OH")
+    AA["T"] = parse_formula("CH CHOH CH3")
+    AA["V"] = parse_formula("CH CH CH3 CH3")
+    AA["W"] = parse_formula("CH CH2 C8 N H6")
+    AA["Y"] = parse_formula("CH CH2 C6H4OH")
+    AAk = AA.keys()
+    #PTM coded as a pair of formula [to_add, to_remove]
+    PTM = {}
+    PTM["*"] = [parse_formula("PO4"), parse_formula("OH")]    # star notes phosphate
+    PTM["a"] = [parse_formula("COOCH3"), parse_formula("H2O")]    # c notes acetate
+    PTM["n"] = [parse_formula("NH2"), parse_formula("OH")]    # amidation (in Cter)
+    PTM["-"] = [parse_formula("OH"), parse_formula('NH2')]    # deamination
+    PTM["h"] = [parse_formula("O"), {}]    # hydroxylation (eg Prolines)
+    PTM["+"] = [parse_formula("H"), {}]    # protonation
+    PTM["o"] = [parse_formula("O"), {}]    # oxydation (eg methionine)
+    PTM["m"] = [parse_formula("CH2"), {}]    # methylation
+    PTMk = PTM.keys()
     for ires in range(len(st)):
         res = st[ires]
         if res == " ":
             continue
-        elif res in AA:
-            if res == "A":          f = parse_formula("CH CH3")
-            elif res == "C":        f = parse_formula("CH CH2 S H")
-            elif res == "D":        f = parse_formula("CH CH2 COOH")
-            elif res == "E":        f = parse_formula("CH CH2 CH2 COOH")
-            elif res == "F":        f = parse_formula("CH CH2 C6H5")
-            elif res == "G":        f = parse_formula("CH2")
-            elif res == "H":        f = parse_formula("CH CH2 C3 N2 H3")
-            elif res == "I":        f = parse_formula("CH CH CH3 CH2 CH3")
-            elif res == "K":        f = parse_formula("CH CH2 CH2 CH2 CH2 NH2")
-            elif res == "L":        f = parse_formula("CH CH2 CH CH3 CH3")
-            elif res == "M":        f = parse_formula("CH CH2 CH2 S CH3")
-            elif res == "N":        f = parse_formula("CH CH2 CONH2")
-            elif res == "P":        f = parse_formula("C CH2 CH2 CH2")
-            elif res == "Q":        f = parse_formula("CH CH2 CH2 CONH2")
-            elif res == "R":        f = parse_formula("CH CH2 CH2 CH2 N C NH2 NH2")
-            elif res == "S":        f = parse_formula("CH CH2 OH")
-            elif res == "T":        f = parse_formula("CH CHOH CH3")
-            elif res == "V":        f = parse_formula("CH CH CH3 CH3")
-            elif res == "W":        f = parse_formula("CH CH2 C8 N H6")
-            elif res == "Y":        f = parse_formula("CH CH2 C6H4OH")
-            addformula(formula, f)
+        elif res in AAk:
+            addformula(formula, AA[res])
         # special codes
-        elif res in PTM:
-            if res == "*":    # star notes phosphate
-                f = parse_formula("PO4")
-                to_rem = parse_formula("OH")
-            elif res == "a":    # c notes acetate
-                f = parse_formula("COOCH3")
-                to_rem = parse_formula("H2O")
-            elif res == "n":    # amidation (in Cter)
-                f = parse_formula("NH2")
-                to_rem = parse_formula("OH")
-            elif res == "-":    # deamination
-                f = parse_formula("OH")
-                to_rem = parse_formula('NH2')
-            elif res == "h":    # hydroxylation (eg Prolines)
-                f = parse_formula("O")
-                to_rem = {}
-            elif res == "+":    # protonation
-                f = parse_formula("H")
-                to_rem = {}
-            elif res == "o":    # oxydation (eg methionine)
-                f = parse_formula("O")
-                to_rem = {}
-            elif res == "m":    # methylation
-                f = parse_formula("CH2")
-                to_rem = {}
-            addformula(formula, f)
-            # remove 
+        elif res in PTMk:
+            to_add, to_rem = PTM[res]
+            addformula(formula, to_add)
             rmformula(formula, to_rem)
-            # for i in to_rem.keys():
-            #     formula[i] -= to_rem[i]
         else:
             raise(Exception("Unknown residue code"))
         # then add pbound
-        if res in AA: # add pbound only if AA
-            if [r for r in st[ires+1:] if r in AA ]:    # and if there is another AA next on st
+        if res in AAk: # add pbound only if AA
+            if [r for r in st[ires+1:] if r in AAk ]:    # and if there is another AA next on st
                 addformula(formula, pbound)
     addformula(formula,cterm)
     return formula
@@ -298,7 +306,8 @@ def printformula(formula):
         else:
             sto = ""
         st += "%s%s "%(k, sto)
-    return st
+    return st.strip()
+
 def monoisotop(formula):
     "returns monoisotopic mass from a formula"
     mass = 0.0
@@ -316,7 +325,6 @@ def average(formula):
         ave = sum([e.mass*e.abund for e in iso] )
         mass += ave*formula[el]
     return mass
-
 
 class Distribution(object):
     """
@@ -449,49 +457,62 @@ class Distribution(object):
         # summit of curve is :  newton(deriv, x0, fprime=second)
         return lambda x: max(0.0,spl(x)) if x>m0-1 else 0    # 
 
-def test1():
-    " example with elemental formula"
-#    test = "C6H14"
-#    test = "K23 I22 S30"
-    #   test = "W5"
-    test = "C254 H377 N65 O75 S6"   # insuline
-    #    test = "C1185 H1850 N282 O339 S18"  # cytochrome oxydase
-    # test = "C769 H1212 N210 O218 S2 H20"  # myoglobine 20+
-    form = parse_formula(test)
-    print "insuline", printformula( form), monoisotop(form), average(form)
+########################################################################################
+class Test(unittest.TestCase):
+    """tests """        
+    def test_formula(self):
+        " test elemental formula, masses and operations"
+        molecule = "K23 I22 S30 W5"     # does not exist !
+        form = parse_formula(molecule)
+        self.assertAlmostEqual(form.average(), 5572.31183942, 8)    # test down to the 8th digit
+        self.assertAlmostEqual(form.monoisotop(), 5566.98044564, 8)
+        self.assertEqual(printformula(form), "I_22 K_23 S_30 W_5")
+        addformula(form, parse_formula("K2"))
+        rmformula(form, parse_formula("S2"))
+        self.assertEqual(form["S"],28)
+        self.assertEqual(form["K"],25)
 
-def test2():
-    " example with protein formula"
-#    test = "RPKPQQFFGCLMn"   # substance P
-#    test = "MKVLWAALLV TFLAGCQAKV EQAVETEPEP ELRQQTEWQS GQRWELALGR FWDYLRWVQT LSEQVQEELL SSQVTQELRA LMDETMKELK AYKSELEEQL TPVAEETRAR LSKELQAAQA RLGADMEDVC GRLVQYRGEV QAMLGQSTEE LRVRLASHLR KLRKRLLRDA DDLQKRLAVY QAGAREGAER GLSAIRERLG PLVEQGRVRA ATVGSLAGQP LQERAQAWGE RLRARMEEMG SRTRDRLDEV KEQVAEVRAK LEEQAQQIRL QAEAFQARLK SWFEPLVEDM QRQWAGLVEK VQAAVGTSAA PVPSDNH" # ApoE
-    test = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
-    form = parse_peptide(test)
-#    addformula(form, parse_formula("H12")) # if you want o compute [M+H_12]12+
-    
-    print "Ubiquitine",printformula( form)
-    print monoisotop(form), average(form)
-    return Distribution(form)
+    def test_prot(self):
+        " test with protein formula"
+        test = "MKVLWAALLV TFLAGCQAKV EQAVETEPEP ELRQQTEWQS GQRWELALGR FWDYLRWVQT LSEQVQEELL SSQVTQELRA LMDETMKELK AYKSELEEQL TPVAEETRAR LSKELQAAQA RLGADMEDVC GRLVQYRGEV QAMLGQSTEE LRVRLASHLR KLRKRLLRDA DDLQKRLAVY QAGAREGAER GLSAIRERLG PLVEQGRVRA ATVGSLAGQP LQERAQAWGE RLRARMEEMG SRTRDRLDEV KEQVAEVRAK LEEQAQQIRL QAEAFQARLK SWFEPLVEDM QRQWAGLVEK VQAAVGTSAA PVPSDNH" # ApoE
+        #test = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
+        form = parse_peptide(test)
+        self.assertEqual(printformula(form), "C_1569 H_2559 N_477 O_483 S_10")
+        pepPTM = "A*CaDmEnF-GhHoIK+"    #that's an heavy PTM !
+        formPTM = parse_peptide(pepPTM)
+        self.assertEqual(printformula(formPTM), "C_47 H_69 N_12 O_20 P S")
 
-def insu():
-    cc = parse_peptide("GIVEQCCASVCSLYQLENYCN")
-    cd = parse_peptide("FVNQHLCGSHLVEALYLVCGERGFFYTPKA")
-    print "Chain, C", monoisotop(cc)
-    print "Chain, D", monoisotop(cd)
-    insuline = copy.deepcopy(cc)
-    addformula(insuline,cd)   # add both chains
-    insuline["H"] -= 6      # remove 6 H for 3 disulfides
-    print "insuline", monoisotop(insuline)
-    Ins = Distribution(insuline)
-    Ins.draw(width=0.1,title="Insuline")
-    
+    def test_insu(self):
+        " test distribution on insuline convalent dimer "
+        print "Testing on insuline"
+        cc = parse_peptide("GIVEQCCASVCSLYQLENYCN")
+        cd = parse_peptide("FVNQHLCGSHLVEALYLVCGERGFFYTPKA")
+        print "Chain, C", monoisotop(cc)
+        print "Chain, D", monoisotop(cd)
+        insuline = copy.deepcopy(cc)
+        addformula(insuline, cd)   # add both chains
+        rmformula(insuline, parse_formula("H6"))      # remove 6 H for 3 disulfides
+        #insuline 5729.60086987
+        self.assertAlmostEqual(monoisotop(insuline), 5729.60086987, 8)
+        Ins = Distribution(insuline)
+        self.assertEqual(Ins.len(), 23)
+        ion22 = Ins.distrib[22]
+        print "Distribution"
+        print Ins
+        self.assertAlmostEqual(ion22.mass, 5751.657557659)
+        self.assertAlmostEqual(100*ion22.proba, 0.000003341)
+
 # load table at import
 (elem_t, name_t, isotope_t ) = load_elements()
-if __name__ == '__main__':
-    D = test2()
+
+def demo():
+    prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
+    form = parse_peptide(prot)
+    D = form.distribution()
     print "By mass\n",D,"\n"
-    D.draw(charge=12, R=1E5, title="Ubiquitine 12+")
-    D.draw_lowres(charge=12)
-    plt.figure()
-    insu()
+    D.draw(charge=6, R=1E5, title="Ubiquitine 6+")
+    D.draw_lowres(charge=6)
     plt.show()
-    
+
+if __name__ == '__main__':
+    unittest.main()
