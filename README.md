@@ -10,13 +10,20 @@ The possibility to draw the isotopic profil is also given.
 Isotopic natural abundance can be changed with the enrich() function.
 
 Typical use is :
-molecule = "K23 I22 S30"
-formula = parse_formula(molecule)   # formula object (in fact a dictionary)
-print "average mass", formula.average()
-print "monoisotopic mass", formula.monoisotop()
-distrib = formula.distribution()    # distribution object
-print distrib
-distrib.draw()
+
+    molecule = "K23 I22 S30"
+    formula = parse_formula(molecule)   # formula object (in fact a dictionary)
+    print "average mass", formula.average()
+    print "monoisotopic mass", formula.monoisotop()
+
+    prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
+    form = parse_peptide(prot)
+    print "average mass", form.average()
+    D = form.distribution()
+    print "By mass\n", D, "\n"
+    D.draw(charge=6,  title="Ubiquitine 6+")
+    D.draw_lowres(charge=6)
+    plt.show()
 
 
 adapted from 
