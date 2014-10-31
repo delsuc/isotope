@@ -33,6 +33,10 @@ http://www.nist.gov/
 First version of algo by FX Coudert,
 Python rewrite by DELSUC Marc-Andre on 2014-03-28.
 Copyright (c) 2014 CNRS. All rights reserved.
+
+recursive descent chemical parser inspired from
+Tim Peters tim_one@email.msn.com
+https://mail.python.org/pipermail/tutor/1999-March/000083.html
 """
 
 import re
@@ -40,6 +44,8 @@ import os
 from collections import defaultdict, namedtuple
 import copy
 import unittest
+import re
+_lexer = re.compile(r"[A-Z][a-z]*|\d+|[()]|<EOS>").match
 
 global  elem_t, name_t, isotope_t
 THRESHOLD = 1E-8
@@ -67,9 +73,6 @@ class Formula( defaultdict ):
         "return the mass distribution as a Distribution object"
         return Distribution(self)
     
-# class Isotope(namedtuple("Isotope", "element isotop mass abund")):
-#     "a micro class for isotopes entries"
-#     pass
 class Isotope(object):
     """
     a micro class for isotopes entries - 4 attributes
@@ -186,33 +189,68 @@ def print_t():
         for i in isotope_t[k]:
             print "    ", i
 
-
+##########################
 def parse_formula(st):
     """
     parse a raw formula "st" to a list of atom and stoechio
     "CCl4" returns  ["C":1, "Cl":4]
+    possible formula are
+        "CH3 CH2 OH"   "(CH3)3 C Cl"  "HO (CH2 CH2 O)30 H" etc...
     """
-    # to rewritten recursive as a list processing to accept ()
-    formula = Formula()
-    for i in range(len(st)):   # through the string
-#        print i,st[i:i+2]
-        if st[i] == " ":    # skip blanks
-            continue
-        if st[i:i+2] in name_t:     # double letter elem
-            k = st[i:i+2]
-            m = re.match("[0-9]+",st[i+2:])
-            if m:
-                formula[k] += int(m.group(0))
+    def _parse_formula(tklist, match=None):
+        """
+        recursive part of parse_formula()
+        match is either None or '(' and tells what is to be matched on exit
+        """
+        def countfromtk():
+            "utility for parsing counts"
+            if tklist:      # if tklist not empty
+                nexttoken = tklist.pop(0)   # is next a count
+                if re.match("[0-9]+",nexttoken):  # count
+                    count = int(nexttoken)
+                else:
+                    tklist.insert(0,nexttoken)    # put it back
+                    count = 1
             else:
-                formula[k] += 1
-        elif st[i] in name_t:       # single letter
-            k = st[i]
-            m = re.match("[0-9]+",st[i+1:])
-            if m:
-                formula[k] += int(m.group(0))
+                count = 1
+            return count
+            #----
+        formula = Formula()     #initialize
+        while tklist:
+            token = tklist.pop(0)
+            form = Formula()
+            if token in name_t:     # element
+                elem = token
+                count = countfromtk()
+                form[elem] = count
+            elif token  == "(":
+                form = _parse_formula(tklist, token)
+                count = countfromtk()
+                if count != 1:
+                    multformula(form,count)
+            elif token == ")":    # end of series
+                if match == "(":
+                    break
+                else:
+                    raise Exception("Unmatching parenthesis")
+            elif token == "<EOS>":
+                if match == "<EOS>":
+                    break
+                else:
+                    raise Exception("Unmatching parenthesis")
+            elif token in (" ","\t"):
+                pass
             else:
-                formula[k] += 1
-    return formula
+                raise Exception("Unkown element : ",token)
+            addformula(formula,form)
+        else:
+            raise Exception("Undecipherable chain")
+        return formula
+        #--------- end of _parse_formula()
+    tklist = re.findall(r"[A-Z][a-z]*|\d+|[()]|<EOS>|.",st+"<EOS>")     # tokenize
+    form = _parse_formula(tklist, match="<EOS>")   # then call recursive function
+    return form
+
 
 def addformula(f1,f2):
     """add inplace the content of f2 to the content of f1"""
@@ -224,12 +262,18 @@ def rmformula(f1,f2):
     for i in f2.keys():
         f1[i] -= f2[i]
         if f1[i]<0 : raise Exception("Negative atom count !")
+def multformula(f1, scalar):
+    """multiply inplace the content of f1 by scalar"""
+    for i in f1.keys():
+        f1[i] *= scalar
 
-def parse_peptide(st):
+def parse_peptide(st, extended=False):
     """
     compute the formula of a peptide/protein given par one letter code
+    
     formula = parse_peptide("ACDEY*GH")     # e.g.
     letter code is standard 1 letter code for amino-acides + additional codes for Post Translational Modifications (PTM)
+
     * posphorylation
     a acetylation
     n amidation
@@ -240,6 +284,9 @@ def parse_peptide(st):
     m methoxylation
     does not verify the chemical coherence of the PTM !
     
+    if extended is True, will also interpret U : Seleno-Cysteine and U : Pyrolysine
+    
+    
     """
     formula = parse_formula("NH2")   # starts with H2N-...
     cterm = parse_formula("COOH")   # end with ..-COOH
@@ -248,23 +295,26 @@ def parse_peptide(st):
     AA["A"] = parse_formula("CH CH3")
     AA["C"] = parse_formula("CH CH2 S H")
     AA["D"] = parse_formula("CH CH2 COOH")
-    AA["E"] = parse_formula("CH CH2 CH2 COOH")
+    AA["E"] = parse_formula("CH (CH2)2 COOH")
     AA["F"] = parse_formula("CH CH2 C6H5")
     AA["G"] = parse_formula("CH2")
     AA["H"] = parse_formula("CH CH2 C3 N2 H3")
     AA["I"] = parse_formula("CH CH CH3 CH2 CH3")
-    AA["K"] = parse_formula("CH CH2 CH2 CH2 CH2 NH2")
+    AA["K"] = parse_formula("CH (CH2)4 NH2")
     AA["L"] = parse_formula("CH CH2 CH CH3 CH3")
-    AA["M"] = parse_formula("CH CH2 CH2 S CH3")
+    AA["M"] = parse_formula("CH (CH2)2 S CH3")
     AA["N"] = parse_formula("CH CH2 CONH2")
-    AA["P"] = parse_formula("C CH2 CH2 CH2")
-    AA["Q"] = parse_formula("CH CH2 CH2 CONH2")
-    AA["R"] = parse_formula("CH CH2 CH2 CH2 N C NH2 NH2")
+    AA["P"] = parse_formula("C (CH2)3")
+    AA["Q"] = parse_formula("CH (CH2)2 CONH2")
+    AA["R"] = parse_formula("CH (CH2)3 N C (NH2)2")
     AA["S"] = parse_formula("CH CH2 OH")
     AA["T"] = parse_formula("CH CHOH CH3")
     AA["V"] = parse_formula("CH CH CH3 CH3")
     AA["W"] = parse_formula("CH CH2 C8 N H6")
-    AA["Y"] = parse_formula("CH CH2 C6H4OH")
+    AA["Y"] = parse_formula("CH CH2 C6H4 OH")
+    if extended:
+        AA["U"] = parse_formula("CH CH2 Se H")  # Selenocysteine
+        AA["O"] = parse_formula("CH (CH2)4 NH CO CH CH CH3 CH2 CH N")  # Pyrolysine
     AAk = AA.keys()
     #PTM coded as a pair of formula [to_add, to_remove]
     PTM = {}
@@ -459,7 +509,7 @@ class Distribution(object):
 
 ########################################################################################
 class Test(unittest.TestCase):
-    """tests """        
+    """tests """
     def test_formula(self):
         " test elemental formula, masses and operations"
         molecule = "K23 I22 S30 W5"     # does not exist !
@@ -471,6 +521,16 @@ class Test(unittest.TestCase):
         rmformula(form, parse_formula("S2"))
         self.assertEqual(form["S"],28)
         self.assertEqual(form["K"],25)
+        form = parse_formula( " ( (HO (CH2 CH2 O)10 )3 N)2 Cl" )    # Check parenthesis
+        self.assertEqual(form["C"],2*3*10*2)
+        self.assertEqual(form["H"],2*3*(1+10*4))
+        self.assertEqual(form["Cl"],1)
+
+    def test_residu(self):
+        "test sum of all aa in extended list"
+        AAlist = "ACDEFGHIKLMNPQRSTVWYOU"
+        masstot = sum( [parse_peptide(aa, extended=True).monoisotop()  for aa in AAlist] )
+        self.assertAlmostEqual(masstot, 3160.44812713)
 
     def test_prot(self):
         " test with protein formula"
