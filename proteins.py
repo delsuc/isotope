@@ -53,6 +53,32 @@ def averagine(mass):
         correc(a,e,v)   # the ".5" allow to be within less than 0.5 in nearly all cases (max is ~0.51)
     return f
 
+def fragments(seq):
+    """
+    given primary seq, generates the sorted list of all 1st generation fragments,
+    with their monoisotopic masses
+    
+    frags, masses = fragments(prot)
+    
+    frags is the ordered list of fragment names
+    masses is the masses
+
+    for i in frags:
+        print i, masses[i]
+    will print all fragments
+    """
+    frags = {}
+    length = len(seq)
+    for i in range(1,length-1):
+        for e in ("a","b","c"):
+            m = iso.monoisotop( iso.parse_peptide(seq[:i], ends=e) )
+            frags[ "%s%d"%(e,i) ] = m
+        for s in ("x","y","z"):
+            m = iso.monoisotop( iso.parse_peptide(seq[i:], starts=s) )
+            frags[ "%s%d"%(s,length-i) ] = m
+    fraglist = sorted(frags.keys(), key=frags.__getitem__, reverse=True)
+    return (fraglist, frags)
+
 def test():
     N = 10000
     mm = np.linspace(1000,50000,N)
@@ -77,5 +103,16 @@ def test2():
     iso.Distribution(fb).draw()
     iso.Distribution(fb).enveloppe()
     plt.show()
+
+def test3():
+    linoleic = "C18 H32 O2"
+    mh = iso.monoisotop(iso.parse_formula("H"))
+    prot = "MGHHIDCGHVDSLVRPCLSYVQGGPGPSGQCCDGVKNLHNQARSQSDRQSACNCLKGIARGIHNLNEDNARSIPPKCGVNLPYTISLNIDCSRV"  #wheat LTP1
+    print "Monoisotopic masses + H+"
+    print "Protein :",iso.monoisotop( iso.parse_peptide(prot) )+mh
+    frags, masses = fragments(prot)
+    for i in frags:
+        print i, masses[i]+mh
+
 if __name__ == '__main__':
-    test2()
+    test3()

@@ -11,12 +11,28 @@ The handy determination from peptide and protein primary sequences is provided.
 
 The possibility to draw the isotopic profil is also given.
 
+Molecules can be described by chemical formula or peptide primary sequence (one letter code)
+so the flollowing entries are legal
+"CH3 CH2 OH"  
+"(NO3)3 C6H3"    # parenthesis can be nested.
+"KEVDFS*GHI"     # for a peptide (* here means phosphtylated (see parse_peptide for the list of PTM)
+
+The main class is Formula from which everything is computed.
+Arithmetic on formula is possible
+
 Typical use is :
+
+#parsing
 molecule = "K23 I22 S30"
-formula = parse_formula(molecule)   # formula object (in fact a dictionary)
-print "average mass", formula.average()
-print "monoisotopic mass", formula.monoisotop()
-distrib = formula.distribution()
+mol_formula = parse_formula(molecule)        # formula object (in fact a dictionary)
+# arithmetic
+hydrated = mol_formula + 2*parse_formula("H2O")
+# masses
+print "average mass", hydrated.average()
+print "monoisotopic mass", hydrated.monoisotop()
+# compute isotopic distrib
+distrib = mol_formula.distribution()
+distrib.draw()
 
 adapted from 
 Kubinyi, H.
@@ -32,9 +48,10 @@ http://www.nist.gov/
 
 First version of algo by FX Coudert,
 Python rewrite by DELSUC Marc-Andre on 2014-03-28.
+madelsuc@unistra.fr
 Copyright (c) 2014 CNRS. All rights reserved.
 
-recursive descent chemical parser inspired from
+recursive descent chemical parser weakly inspired from
 Tim Peters tim_one@email.msn.com
 https://mail.python.org/pipermail/tutor/1999-March/000083.html
 """
@@ -45,7 +62,7 @@ from collections import defaultdict, namedtuple
 import copy
 import unittest
 import re
-_lexer = re.compile(r"[A-Z][a-z]*|\d+|[()]|<EOS>").match
+_lexer = re.compile(r"[A-Z][a-z]*|\d+|\+-|[()]|<EOS>")
 
 global  elem_t, name_t, isotope_t
 THRESHOLD = 1E-8
@@ -72,7 +89,55 @@ class Formula( defaultdict ):
     def distribution(self):
         "return the mass distribution as a Distribution object"
         return Distribution(self)
-    
+    def __len__(self):
+        return "not done yet"
+    def __imul__(self, other):
+        if isinstance(other, int):
+            multformula(self, other)
+            return self
+        else:
+            return NotImplemented
+    def __iadd__(self, other):
+        if isinstance(other, Formula):
+            addformula(self, other)
+            return self
+        else:
+            return NotImplemented
+    def __add__(self, other):
+        if isinstance(other, Formula):
+            res = copy.deepcopy(self)
+            addformula(res, other)
+            return res
+        else:
+            return NotImplemented
+    def __isub__(self, other):
+        if isinstance(other, Formula):
+            rmformula(self, other)
+            return self
+        else:
+            return NotImplemented        
+    def __sub__(self, other):
+        if isinstance(other, Formula):
+            res = copy.deepcopy(self)
+            rmformula(res, other)
+            return res
+        else:
+            return NotImplemented        
+    def __mul__(self, other):
+        if isinstance(other, int):
+            res = copy.deepcopy(self)
+            multformula(res, other)
+            return res
+        else:
+            return NotImplemented
+    def __rmul__(self, other):
+        if isinstance(other, int):
+            res = copy.deepcopy(self)
+            multformula(res, other)
+            return res
+        else:
+            return NotImplemented
+
 class Isotope(object):
     """
     a micro class for isotopes entries - 4 attributes
@@ -90,6 +155,7 @@ class Isotope(object):
         self.abund = abund
     def __str__(self):
         return "Isotope(element=%s, isotop=%s, mass=%s, abund=%s)"%(self.element, self.isotop, self.mass, self.abund)
+    
 
 class Ion(object):      #as if Ion = namedlist("Ion", "mass, proba", verbose=False)
     """
@@ -196,6 +262,7 @@ def parse_formula(st):
     "CCl4" returns  ["C":1, "Cl":4]
     possible formula are
         "CH3 CH2 OH"   "(CH3)3 C Cl"  "HO (CH2 CH2 O)30 H" etc...
+        charges are ignored
     """
     def _parse_formula(tklist, match=None):
         """
@@ -238,7 +305,7 @@ def parse_formula(st):
                     break
                 else:
                     raise Exception("Unmatching parenthesis")
-            elif token in (" ","\t"):
+            elif token in (" ","\t","+","-"):
                 pass
             else:
                 raise Exception("Unkown element : ",token)
@@ -247,7 +314,7 @@ def parse_formula(st):
             raise Exception("Undecipherable chain")
         return formula
         #--------- end of _parse_formula()
-    tklist = re.findall(r"[A-Z][a-z]*|\d+|[()]|<EOS>|.",st+"<EOS>")     # tokenize
+    tklist = re.findall(_lexer, st+"<EOS>")     # tokenize
     form = _parse_formula(tklist, match="<EOS>")   # then call recursive function
     return form
 
@@ -261,19 +328,23 @@ def rmformula(f1,f2):
     """remove inplace the content of f2 to the content of f1"""
     for i in f2.keys():
         f1[i] -= f2[i]
-        if f1[i]<0 : raise Exception("Negative atom count !")
+        if f1[i]<0 : raise Exception("%s: Negative atom count !"%i)
 def multformula(f1, scalar):
     """multiply inplace the content of f1 by scalar"""
     for i in f1.keys():
         f1[i] *= scalar
 
-def parse_peptide(st, extended=False):
+def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     """
     compute the formula of a peptide/protein given par one letter code
     
     formula = parse_peptide("ACDEY*GH")     # e.g.
-    letter code is standard 1 letter code for amino-acides + additional codes for Post Translational Modifications (PTM)
-
+    letter code is standard 1 letter code for amino-acides
+    + additional codes for Post Translational Modifications (PTM) or xyz/abc fragmentation
+    
+    starts is either "NH2" (default) "x"  "y"  "z" or any formula
+    ends is either "COOH" (default) "a"  "b"  "c"  or any formula
+    
     * posphorylation
     a acetylation
     n amidation
@@ -288,8 +359,24 @@ def parse_peptide(st, extended=False):
     
     
     """
-    formula = parse_formula("NH2")   # starts with H2N-...
-    cterm = parse_formula("COOH")   # end with ..-COOH
+    if starts == "x":
+        formula = parse_formula("CONH")
+    elif starts == "y":
+        formula = parse_formula("NH")
+    elif starts == "z":
+        formula = Formula()
+    else:
+        formula = parse_formula(starts)    # default is starts with H2N-...
+        
+    if ends == "a":
+        cterm = Formula()
+    elif ends == "b":
+        cterm = parse_formula("CO")
+    elif ends == "c":
+        cterm = parse_formula("CONH")
+    else:
+        cterm = parse_formula(ends)  # default is end with ..-COOH
+        
     pbound = parse_formula("CO NH")
     AA={}
     AA["A"] = parse_formula("CH CH3")
@@ -314,10 +401,10 @@ def parse_peptide(st, extended=False):
     AA["Y"] = parse_formula("CH CH2 C6H4 OH")
     if extended:
         AA["U"] = parse_formula("CH CH2 Se H")  # Selenocysteine
-        AA["O"] = parse_formula("CH (CH2)4 NH CO CH CH CH3 CH2 CH N")  # Pyrolysine
+        AA["O"] = parse_formula("CH (CH2)4 NH CO CH CH CH3 CH2 CH N")  # Pyrrolysine
     AAk = AA.keys()
     #PTM coded as a pair of formula [to_add, to_remove]
-    PTM = {}
+    PTM = {}    
     PTM["*"] = [parse_formula("PO4"), parse_formula("OH")]    # star notes phosphate
     PTM["a"] = [parse_formula("COOCH3"), parse_formula("H2O")]    # c notes acetate
     PTM["n"] = [parse_formula("NH2"), parse_formula("OH")]    # amidation (in Cter)
@@ -385,9 +472,9 @@ class Distribution(object):
     def __init__(self, formula=None, isotope=None):    # init either from a formula or a isotope
         self.threshold = THRESHOLD
         self.distrib = [Ion(mass=0,proba=1)]    # starts with empty        
-        if formula:
+        if formula is not None:
             self.compute(formula)
-        if isotope:
+        if isotope is not None:
             d = []
             for el in isotope:
                 d.append(Ion(el.mass,el.abund))
@@ -449,8 +536,8 @@ class Distribution(object):
         while self.distrib[-1].proba < self.threshold:      # high
             self.distrib.pop()
     #---------------- utilities --------------
-    def draw(self, title=None, width=0.2, charge=1, R=None):
-        "quick draw of distribution"
+    def draw(self, title=None, width=0.2, charge=1, R=None, label=None):
+        "quick draw of distribution, assumes charge brought by H+"
         import numpy as np
         if R:
             width = 0.25*self.distrib[0].mass/R
@@ -460,11 +547,11 @@ class Distribution(object):
         x[0] = self.distrib[0].mass/charge-5
         x[-1] = self.distrib[-1].mass/charge+5
         for i in range(self.len()):
-            x[1+3*i] =  (self.distrib[i].mass)/charge - width
-            x[2+3*i] =  (self.distrib[i].mass)/charge
+            x[1+3*i] =  (self.distrib[i].mass+charge)/charge - width
+            x[2+3*i] =  (self.distrib[i].mass+charge)/charge
             y[2+3*i] =  100*self.distrib[i].proba
-            x[3+3*i] =  (self.distrib[i].mass)/charge + width
-        plt.plot(x,y)
+            x[3+3*i] =  (self.distrib[i].mass+charge)/charge + width
+        plt.plot(x, y, label=label)
         plt.xlabel("$m/z$")
         plt.ylabel("intensity")
         plt.axis(ymin=-5, ymax=105)
@@ -478,7 +565,7 @@ class Distribution(object):
         spl = self.enveloppe()
         xenv = np.linspace(self.distrib[0].mass-5, self.distrib[-1].mass+5, 1000)
         env = [100*spl(xi) for xi in xenv]
-        plt.plot(xenv/charge, env)
+        plt.plot((xenv+charge)/charge, env)
         if title:
             plt.title(title)
 
@@ -517,13 +604,14 @@ class Test(unittest.TestCase):
         self.assertAlmostEqual(form.average(), 5572.31183942, 8)    # test down to the 8th digit
         self.assertAlmostEqual(form.monoisotop(), 5566.98044564, 8)
         self.assertEqual(printformula(form), "I_22 K_23 S_30 W_5")
-        addformula(form, parse_formula("K2"))
-        rmformula(form, parse_formula("S2"))
+        form += parse_formula("K2")
+        form -= parse_formula("S2")
         self.assertEqual(form["S"],28)
         self.assertEqual(form["K"],25)
         form = parse_formula( " ( (HO (CH2 CH2 O)10 )3 N)2 Cl" )    # Check parenthesis
+        form = form + 2*parse_formula("H+")
         self.assertEqual(form["C"],2*3*10*2)
-        self.assertEqual(form["H"],2*3*(1+10*4))
+        self.assertEqual(form["H"],2+2*3*(1+10*4))
         self.assertEqual(form["Cl"],1)
 
     def test_residu(self):
@@ -535,30 +623,39 @@ class Test(unittest.TestCase):
     def test_prot(self):
         " test with protein formula"
         test = "MKVLWAALLV TFLAGCQAKV EQAVETEPEP ELRQQTEWQS GQRWELALGR FWDYLRWVQT LSEQVQEELL SSQVTQELRA LMDETMKELK AYKSELEEQL TPVAEETRAR LSKELQAAQA RLGADMEDVC GRLVQYRGEV QAMLGQSTEE LRVRLASHLR KLRKRLLRDA DDLQKRLAVY QAGAREGAER GLSAIRERLG PLVEQGRVRA ATVGSLAGQP LQERAQAWGE RLRARMEEMG SRTRDRLDEV KEQVAEVRAK LEEQAQQIRL QAEAFQARLK SWFEPLVEDM QRQWAGLVEK VQAAVGTSAA PVPSDNH" # ApoE
-        #test = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
         form = parse_peptide(test)
+        monotest = monoisotop(form)
         self.assertEqual(printformula(form), "C_1569 H_2559 N_477 O_483 S_10")
         pepPTM = "A*CaDmEnF-GhHoIK+"    #that's an heavy PTM !
         formPTM = parse_peptide(pepPTM)
         self.assertEqual(printformula(formPTM), "C_47 H_69 N_12 O_20 P S")
+        ubi = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
+        test1 = test[:103]
+        test2 = test[103:]
+        mt1 = monoisotop(parse_peptide(test1,ends="b"))
+        mt2 = monoisotop(parse_peptide(test2,starts="y"))
+        self.assertEqual(mt1+mt2, monotest)
+        mt1 = monoisotop(parse_peptide(test1,ends="a"))
+        mt2 = monoisotop(parse_peptide(test2,starts="x"))
+        self.assertEqual(mt1+mt2, monotest)
+        mt1 = monoisotop(parse_peptide(test1,ends="c"))
+        mt2 = monoisotop(parse_peptide(test2,starts="z"))
+        self.assertEqual(mt1+mt2, monotest)
 
     def test_insu(self):
         " test distribution on insuline convalent dimer "
-        print "Testing on insuline"
         cc = parse_peptide("GIVEQCCASVCSLYQLENYCN")
         cd = parse_peptide("FVNQHLCGSHLVEALYLVCGERGFFYTPKA")
-        print "Chain, C", monoisotop(cc)
-        print "Chain, D", monoisotop(cd)
-        insuline = copy.deepcopy(cc)
-        addformula(insuline, cd)   # add both chains
-        rmformula(insuline, parse_formula("H6"))      # remove 6 H for 3 disulfides
+        #print "Chain, C", monoisotop(cc)
+        #print "Chain, D", monoisotop(cd)
+        insuline = cc + cd - parse_formula("H6")    # remove 6 H for 3 disulfides
         #insuline 5729.60086987
         self.assertAlmostEqual(monoisotop(insuline), 5729.60086987, 8)
         Ins = Distribution(insuline)
         self.assertEqual(Ins.len(), 23)
         ion22 = Ins.distrib[22]
-        print "Distribution"
-        print Ins
+        #print "Distribution"
+        #print Ins
         self.assertAlmostEqual(ion22.mass, 5751.657557659)
         self.assertAlmostEqual(100*ion22.proba, 0.000003341)
 
@@ -568,11 +665,28 @@ class Test(unittest.TestCase):
 def demo():
     prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
     form = parse_peptide(prot)
+    print form.average(), form.monoisotop()
     D = form.distribution()
     print "By mass\n",D,"\n"
     D.draw(charge=6, R=1E5, title="Ubiquitine 6+")
     D.draw_lowres(charge=6)
     plt.show()
+def demo2():
+    form1 = parse_peptide("CCCC")
+    D1 = form1.distribution()
+    form2 = parse_peptide("VVAVG")
+    D2 = form2.distribution()
+    somme = form1 + 2*form2 - 3*parse_formula("H2O")
+    print form1.monoisotop(), form2.monoisotop(), somme.monoisotop()
+    D1.draw(label="CCCC")
+    D2.draw(label="VVAVG")
+    plt.legend()
+    plt.show()
+    
+    
 
 if __name__ == '__main__':
-    unittest.main()
+#    unittest.main()
+    #demo2()
+    form = parse_formula( "SH (CH2)11 (OCH2CH2)3 OCH2 COOH " )    # Check
+    print form.average()
