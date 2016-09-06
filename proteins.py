@@ -79,6 +79,16 @@ def fragments(seq):
     fraglist = sorted(frags.keys(), key=frags.__getitem__, reverse=True)
     return (fraglist, frags)
 
+def multicharge(prot, chargefrom=1, chargeto=4):
+    """given prot, a protein formula, computes multicharged pattern
+    prints the monoisotopic and average positions
+    """
+    H = iso.parse_formula("H").average()
+    P = prot.monoisotop()
+    Pa = prot.average()
+    print "Charge:  monoisotp     average"
+    for i in range(chargefrom, chargeto):
+        print "   %d+ : %10.4f  %10.4f"%(i, (P+i*H)/i, (Pa+i*H)/i)
 def test():
     N = 10000
     mm = np.linspace(1000,50000,N)

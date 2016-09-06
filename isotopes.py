@@ -15,7 +15,7 @@ Molecules can be described by chemical formula or peptide primary sequence (one 
 so the flollowing entries are legal
 "CH3 CH2 OH"  
 "(NO3)3 C6H3"    # parenthesis can be nested.
-"KEVDFS*GHI"     # for a peptide (* here means phosphtylated (see parse_peptide for the list of PTM)
+"KEVDFS*GHI"     # for a peptide (* here means phosphorylated (see parse_peptide for the list of PTM)
 
 The main class is Formula from which everything is computed.
 Arithmetic on formula is possible
@@ -33,6 +33,26 @@ print "monoisotopic mass", hydrated.monoisotop()
 # compute isotopic distrib
 distrib = mol_formula.distribution()
 distrib.draw()
+
+There is a cascade of data representations
+
+String           either raw atomic composition or one-letter peptide sequence)
+    from which you compute the Formula()
+Formula()        contains the raw formula with the number of each atomic species
+    - you can combine and do arithmetics with them
+    from which you can compute
+    - monoisotopic()
+    - average()  - these are fast
+    - Distribution()
+
+Distribution()   contains the list of each exact mass with intensities
+    - print
+    - draw()
+    - sort by intensities or masses
+
+of course the isotopic distribution (and average mass) depend on isotopic abundance, which are either looaded from natural distribution (from NIST db) or modified with the enrich() function.
+
+There are also low level structures ( Ion() and Isotop() that you can usually ignore )
 
 adapted from 
 Kubinyi, H.
@@ -90,7 +110,7 @@ class Formula( defaultdict ):
         "return the mass distribution as a Distribution object"
         return Distribution(self)
     def __len__(self):
-        return "not done yet"
+        return len(self.keys())
     def __imul__(self, other):
         if isinstance(other, int):
             multformula(self, other)
@@ -256,6 +276,22 @@ def print_t():
             print "    ", i
 
 ##########################
+def parse(st):
+    """
+    generic parser, first try parse_peptide(), then parse_formula(), the give up
+    """
+    f = None
+    try:
+        f = parse_peptide(st)
+    except:
+        try:
+            f = parse_formula(st)
+        except:
+            pass
+    if f is None:
+        raise Exception("Could not understand the input, not a peptide nor a raw formula")
+    return f
+
 def parse_formula(st):
     """
     parse a raw formula "st" to a list of atom and stoechio
@@ -336,7 +372,7 @@ def multformula(f1, scalar):
 
 def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     """
-    compute the formula of a peptide/protein given par one letter code
+    compute the formula of a peptide/protein given by one letter code
     
     formula = parse_peptide("ACDEY*GH")     # e.g.
     letter code is standard 1 letter code for amino-acides
@@ -690,3 +726,10 @@ if __name__ == '__main__':
     #demo2()
     form = parse_formula( "SH (CH2)11 (OCH2CH2)3 OCH2 COOH " )    # Check
     print form.average()
+    import time
+    t0 = time.time()
+    prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
+    form = parse_peptide(prot)
+    D = form.distribution()
+    print "Ubi : %.1f seconds"%( time.time()-t0)
+    print D
