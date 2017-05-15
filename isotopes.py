@@ -76,6 +76,7 @@ Tim Peters tim_one@email.msn.com
 https://mail.python.org/pipermail/tutor/1999-March/000083.html
 """
 
+from __future__ import division, print_function
 import re
 import os
 from collections import defaultdict, namedtuple
@@ -246,6 +247,11 @@ def load_elements(filename=None):
                         abund = readval(f[2])   # 0.0107
                     except IndexError:
                         abund = 0.0
+                    if isotope_t[elem][-1].isotop != isotop-1:
+#                        print('*** curring', name)
+#   adding 0 abundance isotopes when there is a gap in isotopic scale, 
+#   to cure a bug in the algorithm
+                        isotope_t[elem].append(Isotope(elem, isotop-1, float(isotop-1), 0.0))
                     isotope_t[elem].append(Isotope(elem, isotop, mass, abund))  # 
             
     elem_t = dict(zip(name_t.values(), name_t.keys()))      # dict by element_number of name
@@ -266,14 +272,15 @@ def enrich(element="C",isotop=13, ratio=1.0):
             i.abund = ratio
         else:
             i.abund = i.abund*(1-ratio)/(1-prev)
-        print "    ", i
+        print ("    ", i)
     
 def print_t():
     " print out the table read by load_elements()"
     for k in isotope_t.keys():
-        print elem_t[k], k
+        print (elem_t[k], k)
         for i in isotope_t[k]:
-            print "    ", i
+            if i.abund != 0.0:
+                print ("    ", i)
 
 ##########################
 def parse(st):
@@ -360,11 +367,13 @@ def addformula(f1,f2):
     for i in f2.keys():
         f1[i] += f2[i]
 
-def rmformula(f1,f2):
-    """remove inplace the content of f2 to the content of f1"""
+def rmformula(f1,f2, check=True):
+    """remove inplace the content of f2 to the content of f1
+    check enforces a positive atome count"""
     for i in f2.keys():
         f1[i] -= f2[i]
-        if f1[i]<0 : raise Exception("%s: Negative atom count !"%i)
+        if check:
+            if f1[i]<0 : raise Exception("%s: Negative atom count !"%i)
 def multformula(f1, scalar):
     """multiply inplace the content of f1 by scalar"""
     for i in f1.keys():
@@ -474,6 +483,8 @@ def printformula(formula):
     "nice print of a formula"
     st =""
     for k in sorted(formula.keys()):
+        if formula[k] == 0:  # appears sometimes when doing formula arithmetics !
+            continue
         if formula[k] >1:
             sto = "_%d"%(formula[k])
         else:
@@ -499,6 +510,7 @@ def average(formula):
         mass += ave*formula[el]
     return mass
 
+####################################################################
 class Distribution(object):
     """
     handle and compute isotopic distribution
@@ -534,20 +546,28 @@ class Distribution(object):
 
     def combine(self,dist2):
         """combine two Distributions"""
+        dprint = lambda *x: None
         d = [Ion(mass=0.0, proba=0.0) for i in range((self.len()+dist2.len()-1)) ]
+        dprint('self',self.distrib)
+        dprint(2,d)
         for i in range(self.len()):
             for j in range(dist2.len()):
                 d[i+j].proba += self.distrib[i].proba*dist2.distrib[j].proba
+                dprint("p",i,j,d)
         for i in range(self.len()):
             for j in range(dist2.len()):
                 d[i+j].mass += (self.distrib[i].mass + dist2.distrib[j].mass) \
                                 * self.distrib[i].proba * dist2.distrib[j].proba
-        for ion in d:
-            if ion.proba > 0.0:
-                ion.mass /= ion.proba
+                dprint("m",i,j,d)
+        for iion in d:
+            if iion.proba > 0.0:
+                iion.mass /= iion.proba
         self.distrib = copy.deepcopy(d)
+        dprint("done",self.distrib)
         self.normalize()
+        dprint("normed",self.distrib)
         self.prune()
+        dprint("pruned",self.distrib)
 
     def compute(self, formula):
         """compute a Distribution from a formula returned by parse_formula()"""
@@ -557,6 +577,7 @@ class Distribution(object):
             dd = Distribution()
             for i in range(formula[el]):
                 dd.combine(d)
+#                print(i,dd) ###
             self.combine(dd)
 
     def normalize(self):
@@ -630,6 +651,11 @@ class Distribution(object):
         # summit of curve is :  newton(deriv, x0, fprime=second)
         return lambda x: max(0.0,spl(x)) if x>m0-1 else 0    # 
 
+    def tolist(self):
+        """
+        return the distribution as a plain list [ (mass,intensity), () .. ]
+        """
+        return [ (ion.mass, ion.proba) for ion in self.distrib ]
 ########################################################################################
 class Test(unittest.TestCase):
     """tests """
@@ -701,9 +727,9 @@ class Test(unittest.TestCase):
 def demo():
     prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
     form = parse_peptide(prot)
-    print form.average(), form.monoisotop()
+    print (form.average(), form.monoisotop())
     D = form.distribution()
-    print "By mass\n",D,"\n"
+    print ("By mass\n",D,"\n")
     D.draw(charge=6, R=1E5, title="Ubiquitine 6+")
     D.draw_lowres(charge=6)
     plt.show()
@@ -713,7 +739,7 @@ def demo2():
     form2 = parse_peptide("VVAVG")
     D2 = form2.distribution()
     somme = form1 + 2*form2 - 3*parse_formula("H2O")
-    print form1.monoisotop(), form2.monoisotop(), somme.monoisotop()
+    print (form1.monoisotop(), form2.monoisotop(), somme.monoisotop())
     D1.draw(label="CCCC")
     D2.draw(label="VVAVG")
     plt.legend()
@@ -725,11 +751,11 @@ if __name__ == '__main__':
 #    unittest.main()
     #demo2()
     form = parse_formula( "SH (CH2)11 (OCH2CH2)3 OCH2 COOH " )    # Check
-    print form.average()
+    print (form.average())
     import time
     t0 = time.time()
     prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
     form = parse_peptide(prot)
     D = form.distribution()
-    print "Ubi : %.1f seconds"%( time.time()-t0)
-    print D
+    print ("Ubi : %.1f seconds"%( time.time()-t0))
+    print( D)
