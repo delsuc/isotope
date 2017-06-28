@@ -91,7 +91,7 @@ def averagine(mass_target, mtype="average", PTM=None, Sulf=None):
 def fragments(seq):
     """
     given primary seq, generates the sorted list of all 1st generation fragments,
-    with their monoisotopic masses
+    with their monoisotopic masses, assuming a +1 charge from H+
     
     frags, masses = fragments(prot)
     
@@ -104,7 +104,8 @@ def fragments(seq):
     """
     frags = {}
     length = len(seq)
-    for i in range(1,length-1):
+    mH = iso.parse_formula("H").monoisotop()
+    for i in range(1,length):
         for e in ("a","b","c"):
             m = iso.monoisotop( iso.parse_peptide(seq[:i], ends=e) )
             frags[ "%s%d"%(e,i) ] = m

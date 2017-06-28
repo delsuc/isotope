@@ -398,6 +398,7 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     o oxydation
     + protonation
     m methoxylation
+    b beta-mercaptoethanol adduct
     does not verify the chemical coherence of the PTM !
     
     if extended is True, will also interpret U : Seleno-Cysteine and U : Pyrolysine
@@ -407,7 +408,7 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     if starts == "x":
         formula = parse_formula("CONH")
     elif starts == "y":
-        formula = parse_formula("NH")
+        formula = parse_formula("NH3")  # not sure why, shouldn't it be "NH" ?
     elif starts == "z":
         formula = Formula()
     else:
@@ -451,7 +452,8 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     #PTM coded as a pair of formula [to_add, to_remove]
     PTM = {}    
     PTM["*"] = [parse_formula("PO4"), parse_formula("OH")]    # star notes phosphate
-    PTM["a"] = [parse_formula("COOCH3"), parse_formula("H2O")]    # c notes acetate
+    PTM["a"] = [parse_formula("COO CH3"), parse_formula("H2O")]    # c notes acetate
+    PTM["b"] = [parse_formula("SH CH2 CH2 OH"), parse_formula("H2")]    # b is for beta mercapto (on Cys)
     PTM["n"] = [parse_formula("NH2"), parse_formula("OH")]    # amidation (in Cter)
     PTM["-"] = [parse_formula("OH"), parse_formula('NH2')]    # deamination
     PTM["h"] = [parse_formula("O"), {}]    # hydroxylation (eg Prolines)
@@ -723,6 +725,8 @@ class Test(unittest.TestCase):
 
 # load table at import
 (elem_t, name_t, isotope_t ) = load_elements()
+import scipy.constants as cts
+m_e = cts.physical_constants['electron mass in u'][0]    # electron mass in u ~0.00054
 
 def demo():
     prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
