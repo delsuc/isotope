@@ -4,8 +4,8 @@ Utilities to handle distribution of isotopic deconvolution
 """
 from __future__ import division, print_function
 import copy
-import isotopes as iso
-from proteins import averagine
+from . import isotopes as iso
+from .proteins import averagine
 
 class Fstore(object):
     """

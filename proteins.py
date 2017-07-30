@@ -14,7 +14,7 @@ Copyright (c) 2014 IGBMC. All rights reserved.
 from __future__ import division, print_function
 import numpy as np
 import matplotlib.pyplot as plt
-import isotopes as iso
+from . import isotopes as iso
 
 Averagine_def = {"C":4.9384, "H":7.7583, "N":1.3577, "O":1.4773, "S":0.0417 }
 
