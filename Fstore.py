@@ -7,6 +7,8 @@ import copy
 from . import isotopes as iso
 from .proteins import averagine
 
+verbose = False
+
 class Fstore(object):
     """
     a store for isotopic distributions from formulas
@@ -61,16 +63,16 @@ class Fstore(object):
         if b is None:
             close = self.closest(form)
             if close is None:
-                print(form)
+                if verbose: print(form)
                 b = form.distribution()
             else:
-                print(close)
+                if verbose: print(close)
                 mdif = form-close   # formula arithmetics
                 try:
                     b = self.get(close)  # stored distribution
                 except KeyError:    # should never happen !!!!  A VERIFIER   MAD
                     b = close.distribution()
-                    print("***")
+                    if verbose: print("***")
                 mddist = mdif.distribution()    # distrib to add
                 b.combine(mddist)   # combine() adds mddist to b
             self.set(form,b)

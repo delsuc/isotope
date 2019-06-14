@@ -18,7 +18,7 @@ from . import isotopes as iso
 
 Averagine_def = {"C":4.9384, "H":7.7583, "N":1.3577, "O":1.4773, "S":0.0417 }
 
-def averagine(mass_target, mtype="average", PTM=None, Sulf=None):
+def averagine(mass_target, mtype="average", PTM=None, Sulf=None, minimummass=200):
     """
     given an average mass, returns the averagine formula closest to this mass
     
@@ -57,8 +57,8 @@ def averagine(mass_target, mtype="average", PTM=None, Sulf=None):
     else:
         raise Exception("wrong mtype mode")
     # reject smaller masses
-    if mass_target < 500:
-        raise(Exception("mass should be larger than 500"))
+    if mass_target < minimummass:
+        raise(Exception("mass should be larger than %f"%minimummass))
     # cure possible PTM and sulfurs
     if PTM:
         formPTM = iso.parse(PTM)
