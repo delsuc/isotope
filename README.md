@@ -1,8 +1,4 @@
-# WARNING - This repository is obsolete
-**Because of a change in Bitbucket policy, this repository has been moved to https://github.com/delsuc/isotope
-in june 2020.**
-
-## isotopes
+# isotopes
 
 This module allows the precise computation of isotopic distributions, average mass, and monoisotopic masses
 of arbitrary chemical formula.
