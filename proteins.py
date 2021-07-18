@@ -110,8 +110,11 @@ def fragments(seq):
             m = iso.monoisotop( iso.parse_peptide(seq[:i], ends=e) )
             frags[ "%s%d"%(e,i) ] = m
         for s in ("x","y","z"):
-            m = iso.monoisotop( iso.parse_peptide(seq[i:], starts=s) )
-            frags[ "%s%d"%(s,length-i) ] = m
+            try:
+                m = iso.monoisotop( iso.parse_peptide(seq[i:], starts=s) )      # happens on modifyied aa
+                frags[ "%s%d"%(s,length-i) ] = m
+            except:
+                pass
     fraglist = sorted(frags.keys(), key=frags.__getitem__, reverse=True)
     return (fraglist, frags)
 

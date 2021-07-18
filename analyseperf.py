@@ -49,22 +49,22 @@ class Analyser(object):
         listoftime = []
         for s in self.listofsize:
             self.generate_sequence(s)
-            start = time.clock()
+            start = time.time()
             self.forms.append(iso.parse_peptide(self.seq))
-            realtime = time.clock()-start
+            realtime = time.time()-start
             listoftime.append(realtime)
-        self.ppeptide_time = zip(self.listofsize, listoftime)
+        self.ppeptide_time = list(zip(self.listofsize, listoftime))
 
     def analyse_standard(self, func):
         """ Return a list of couple of (size, time) for a generic function
         with formula in params"""
         listoftime = []
         for formula in self.forms:
-            start = time.clock()
+            start = time.time()
             func(formula)
-            realtime = time.clock()-start
+            realtime = time.time()-start
             listoftime.append(realtime)
-        res = zip(self.listofsize, listoftime)
+        res = list(zip(self.listofsize, listoftime))
         return res
 
 

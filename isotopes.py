@@ -282,10 +282,10 @@ def print_t():
             if i.abund != 0.0:
                 print ("    ", i)
 
-##########################
+""
 def parse(st):
     """
-    generic parser, first try parse_peptide(), then parse_formula(), the give up
+    generic parser, first try parse_peptide(), then parse_formula(), then give up
     """
     f = None
     try:
@@ -384,12 +384,21 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     compute the formula of a peptide/protein given by one letter code
     
     formula = parse_peptide("ACDEY*GH")     # e.g.
-    letter code is standard 1 letter code for amino-acides
-    + additional codes for Post Translational Modifications (PTM) or xyz/abc fragmentation
+    letter code is standard 1 letter code for amino-acids
     
-    starts is either "NH2" (default) "x"  "y"  "z" or any formula
-    ends is either "COOH" (default) "a"  "b"  "c"  or any formula
+    for xyz/abc fragmentation
+
+    - starts is either 
+        - "NH2" (default) - for a regular peptide
+        - "x"  "y"  "z" - for MS fragments 
+        - or any formula
+    - ends is either
+        - "COOH" (default) - for a regular peptide
+        - "a"  "b"  "c" - for MS fragments 
+        -  or any formula
     
+    additional codes for Post Translational Modifications (PTM)
+
     * posphorylation
     a acetylation
     n amidation
@@ -512,7 +521,7 @@ def average(formula):
         mass += ave*formula[el]
     return mass
 
-####################################################################
+""
 class Distribution(object):
     """
     handle and compute isotopic distribution
@@ -658,7 +667,7 @@ class Distribution(object):
         return the distribution as a plain list [ (mass,intensity), () .. ]
         """
         return [ (ion.mass, ion.proba) for ion in self.distrib ]
-########################################################################################
+""
 class Test(unittest.TestCase):
     """tests """
     def test_formula(self):
