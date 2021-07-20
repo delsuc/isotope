@@ -34,6 +34,8 @@ print "monoisotopic mass", hydrated.monoisotop()
 distrib = mol_formula.distribution()
 distrib.draw()
 
+The version 1.1 introduces the fast computation of fine isotopic pattern using the neutronstar algo.
+
 There is a cascade of data representations
 
 String           either raw atomic composition or one-letter peptide sequence)
@@ -74,6 +76,8 @@ Copyright (c) 2014 CNRS. All rights reserved.
 recursive descent chemical parser weakly inspired from
 Tim Peters tim_one@email.msn.com
 https://mail.python.org/pipermail/tutor/1999-March/000083.html
+
+code for fine isotopic pattern require the external neutronstar prgm - from https://bitbucket.org/orserang/neutronstar.git
 """
 
 from __future__ import division, print_function
@@ -83,13 +87,18 @@ from collections import defaultdict, namedtuple
 import copy
 import unittest
 import re
+import warnings
+from subprocess import check_output
+from pprint import pprint
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 _lexer = re.compile(r"[A-Z][a-z]*|\d+|\+-|[()]|<EOS>")
 
 global  elem_t, name_t, isotope_t
 THRESHOLD = 1E-8
-
-import matplotlib.pyplot as plt
-import numpy as np
+version = "1.1"
 
 class Formula( defaultdict ):
     """
@@ -176,7 +185,7 @@ class Isotope(object):
         self.abund = abund
     def __str__(self):
         return "Isotope(element=%s, isotop=%s, mass=%s, abund=%s)"%(self.element, self.isotop, self.mass, self.abund)
-    
+
 
 class Ion(object):      #as if Ion = namedlist("Ion", "mass, proba", verbose=False)
     """
@@ -273,7 +282,7 @@ def enrich(element="C",isotop=13, ratio=1.0):
         else:
             i.abund = i.abund*(1-ratio)/(1-prev)
         print ("    ", i)
-    
+
 def print_t():
     " print out the table read by load_elements()"
     for k in isotope_t.keys():
@@ -490,6 +499,17 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     addformula(formula,cterm)
     return formula
 
+def rawformula(formula):
+    "normalized print of a formula - needed for neutronstar"
+    st =""
+    for k in sorted(formula.keys()):
+        if formula[k] == 0:  # appears sometimes when doing formula arithmetics !
+            continue
+        else:
+            sto = "%d"%(formula[k])
+        st += "%s%s"%(k, sto)
+    return st.strip()
+
 def printformula(formula):
     "nice print of a formula"
     st =""
@@ -521,6 +541,42 @@ def average(formula):
         mass += ave*formula[el]
     return mass
 
+def spectrify(masses, probs, RP=10000, normalize=100.0, point_spacing=None):
+    '''
+    Compute a gaussian mass spectrum spectrum from a distribution.
+
+    masses is an ordered array of the masses.
+    probas is an array of the peak intensities.
+    RP is the resolving power of the gaussian
+    normalize is the value of the largest point
+    point_spacing is the resolution of the mass axis
+        computed from RP if missing
+
+    returns mass,spec
+    plot(mass,spec) will draw the spectrum
+
+    inspired from a code by P.O'Connor
+    '''
+    spread = masses[-1]-masses[0]+1
+    c = masses[0]/(2.3548*RP)   # 2.3548 is the FWMH of a gaussian
+    var = 2*(c**2)
+
+    if point_spacing is None:
+        point_spacing = 0.25*np.sqrt(var)
+    if RP>10000:
+        margin = 0.5
+    elif RP>1000:
+        margin = 3
+    else:
+        margin = 8
+    mass = np.arange(masses[0]-margin,masses[-1]+margin,point_spacing)
+    spec = np.zeros_like(mass)
+
+    for m,p in zip(masses,probs):
+        diff = (mass-m)**2
+        spec +=  p * np.exp(-diff/var)
+    spec *= normalize/spec.max()
+    return mass,spec
 ""
 class Distribution(object):
     """
@@ -593,7 +649,7 @@ class Distribution(object):
 
     def normalize(self):
         """normalize distrib such that max() == 1"""
-        M = max([self.distrib[i].proba for i in range(self.len())])
+        M = max([ion.proba for ion in self.distrib])
         for i in range(self.len()):
             self.distrib[i].proba /= M
 
@@ -604,8 +660,23 @@ class Distribution(object):
         while self.distrib[-1].proba < self.threshold:      # high
             self.distrib.pop()
     #---------------- utilities --------------
-    def draw(self, title=None, width=0.2, charge=1, R=None, label=None):
-        "quick draw of distribution, assumes charge brought by H+"
+    def draw(self, charge=1, RP=10000, label=None):
+        """
+        draw the distribution at a given charge and resolving power RP
+        """
+        masses = [ion.mass for ion in self.distrib ]
+        probas = [ion.proba for ion in self.distrib]
+        m,y = spectrify(masses, probas, RP=RP)
+        plt.plot(m/charge, y, label=label)
+        plt.xlabel("$m/z$")
+        plt.ylabel("intensity")
+#        plt.axis(ymin=-5, ymax=105)
+
+    def _draw(self, title=None, width=0.2, charge=1, R=None, label=None):
+        "obsolete version of the draw() method"
+        "quick draw of distribution"
+        warnings.warn("Obsolete version", UserWarning, stacklevel=1)
+
         import numpy as np
         if R:
             width = 0.25*self.distrib[0].mass/R
@@ -615,10 +686,10 @@ class Distribution(object):
         x[0] = self.distrib[0].mass/charge-5
         x[-1] = self.distrib[-1].mass/charge+5
         for i in range(self.len()):
-            x[1+3*i] =  (self.distrib[i].mass+charge)/charge - width
-            x[2+3*i] =  (self.distrib[i].mass+charge)/charge
+            x[1+3*i] =  (self.distrib[i].mass)/charge - width
+            x[2+3*i] =  (self.distrib[i].mass)/charge
             y[2+3*i] =  100*self.distrib[i].proba
-            x[3+3*i] =  (self.distrib[i].mass+charge)/charge + width
+            x[3+3*i] =  (self.distrib[i].mass)/charge + width
         plt.plot(x, y, label=label)
         plt.xlabel("$m/z$")
         plt.ylabel("intensity")
@@ -642,6 +713,7 @@ class Distribution(object):
         compute the smoothed enveloppe for a distribution
         f = D.enveloppe()
         returns a function f which computes the enveloppe on any x points : f(x)
+        probably useless - maybe for teaching
         """
         from scipy.interpolate import UnivariateSpline
         from scipy.optimize import newton
@@ -667,7 +739,61 @@ class Distribution(object):
         return the distribution as a plain list [ (mass,intensity), () .. ]
         """
         return [ (ion.mass, ion.proba) for ion in self.distrib ]
-""
+
+###################################
+# code for fine isotopic pattern
+# need to install neutronstar - from https://bitbucket.org/orserang/neutronstar.git
+# then enter in NS the location of the neutronstar binary code
+
+NS = "neutronstar/src/neutronstar"
+
+def fineisotopicdistrib(formula, length=1000, full_output=False):
+    """
+    compute a peak a list of all the peaks in a fine isotopic pattern.
+    if not full_output
+        returns D a normalized iso.Distribution, with the largest isotopes (truncated to length), sorted by abundance
+    else
+        returns (D, coverage, processing_time_in_sec)
+    where coverage is ratio of isotopes covered by D
+
+    It uses the super fast "neutronstar" algorithm by Oliver Serang et al,
+        https://dx.doi.org/10.1021/acs.analchem.0c01670
+        Anal. Chem. 2020, 92, 10613−10619
+    which has to be installed before hand  from https://bitbucket.org/orserang/neutronstar.git
+
+    code probably not valid on windows !
+    """
+    if os.path.exists(NS) and os.access(NS, os.X_OK):   # check if exists and runable
+        retcode = check_output([NS, rawformula(formula), '-k', str(length), '1.05', 'sort_by_abundance'])
+    else:
+        raise Exception("fine isotopic distribution is not available - please install neutronstar program")
+
+    # parse results
+    result = retcode.split(b'\n')     # split lines
+    timline = result.pop(0).decode()  # get time
+    tim = float(timline.split()[1])
+#    print(tim, 'seconds')
+    result.pop(0)                     # skip head
+    # parse distribution into an isotopes Distribution()
+    D = Distribution()
+    D.distrib = []
+    #D.threshold = 1E-12
+    for r in result:
+        line = r.decode().split()
+        if line[0] == 'TOTAL':        # last line !  
+            ltotal = float(line[3])   # contains log(coverage)
+            break
+        labund = float(line[1])
+        mass = float(line[3])
+        D.distrib.append(Ion(mass, np.exp(labund)))
+#    D.sort_by_mass()
+    D.normalize()
+    if full_output:
+        return (D, np.exp(ltotal), tim)
+    else:
+        return D
+    #pprint( retcode.split(b'\n')[0:10])
+
 class Test(unittest.TestCase):
     """tests """
     def test_formula(self):
@@ -757,7 +883,7 @@ def demo2():
     D2.draw(label="VVAVG")
     plt.legend()
     plt.show()
-    
+
     
 
 if __name__ == '__main__':
