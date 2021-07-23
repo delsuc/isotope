@@ -697,6 +697,7 @@ class Distribution(object):
         """
         draw the distribution at a given charge and resolving power RP
         """
+        self.sort_by_mass()
         m,y = self.spectrify(largest=largest, RP=RP)
         # m and y are nparray, so we can make arithmetics
         plt.plot(m/charge, y, color, label=label)
