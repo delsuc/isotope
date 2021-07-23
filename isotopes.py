@@ -34,8 +34,6 @@ print "monoisotopic mass", hydrated.monoisotop()
 distrib = mol_formula.distribution()
 distrib.draw()
 
-The version 1.1 introduces the fast computation of fine isotopic pattern using the neutronstar algo.
-
 There is a cascade of data representations
 
 String           either raw atomic composition or one-letter peptide sequence)
@@ -78,6 +76,8 @@ Tim Peters tim_one@email.msn.com
 https://mail.python.org/pipermail/tutor/1999-March/000083.html
 
 code for fine isotopic pattern require the external neutronstar prgm - from https://bitbucket.org/orserang/neutronstar.git
+
+The version 1.1 introduces the fast computation of fine isotopic pattern using the neutronstar algo.
 """
 
 from __future__ import division, print_function
@@ -94,11 +94,22 @@ from pprint import pprint
 import matplotlib.pyplot as plt
 import numpy as np
 
+version = "1.1"
+
+#####  Configuration ##############################
+# code for fine isotopic pattern
+# need to install neutronstar - from https://bitbucket.org/orserang/neutronstar.git
+# then enter in NS the absolute location of the neutronstar binary code
+NS = "/home/mad/neutronstar/src/neutronstar"
+
+# THRESHOLD is the default value used for pruning when computing isotopic patterns
+THRESHOLD = 1E-8
+
+#####  END Configuration ##############################
+
 _lexer = re.compile(r"[A-Z][a-z]*|\d+|\+-|[()]|<EOS>")
 
 global  elem_t, name_t, isotope_t
-THRESHOLD = 1E-8
-version = "1.1"
 
 class Formula( defaultdict ):
     """
@@ -408,7 +419,7 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     
     additional codes for Post Translational Modifications (PTM)
 
-    * posphorylation
+    * phosphorylation
     a acetylation
     n amidation
     - deamidation
@@ -419,14 +430,14 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     b beta-mercaptoethanol adduct
     does not verify the chemical coherence of the PTM !
     
-    if extended is True, will also interpret U : Seleno-Cysteine and U : Pyrolysine
+    if extended is True, will also interpret U: Seleno-Cysteine and O: Pyrolysine
     
     
     """
     if starts == "x":
         formula = parse_formula("CONH")
     elif starts == "y":
-        formula = parse_formula("NH3")  # not sure why, shouldn't it be "NH" ?
+        formula = parse_formula("NH3")  # shouldn't it be "NH" - no it seems, standard y ions are -NH3+ 
     elif starts == "z":
         formula = Formula()
     else:
@@ -437,7 +448,7 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     elif ends == "b":
         cterm = parse_formula("CO")
     elif ends == "c":
-        cterm = parse_formula("CONH")
+        cterm = parse_formula("CONH3")  # idem y ions
     else:
         cterm = parse_formula(ends)  # default is end with ..-COOH
         
@@ -469,11 +480,11 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     AAk = AA.keys()
     #PTM coded as a pair of formula [to_add, to_remove]
     PTM = {}    
-    PTM["*"] = [parse_formula("PO4"), parse_formula("OH")]    # star notes phosphate
+    PTM["*"] = [parse_formula("PO4H2"), parse_formula("OH")]    # star notes phosphate
     PTM["a"] = [parse_formula("COO CH3"), parse_formula("H2O")]    # c notes acetate
     PTM["b"] = [parse_formula("SH CH2 CH2 OH"), parse_formula("H2")]    # b is for beta mercapto (on Cys)
-    PTM["n"] = [parse_formula("NH2"), parse_formula("OH")]    # amidation (in Cter)
-    PTM["-"] = [parse_formula("OH"), parse_formula('NH2')]    # deamination
+    PTM["n"] = [parse_formula("NH3"), parse_formula("OH")]    # amidation (in Cter) assumes NH3+
+    PTM["-"] = [parse_formula("OH"), parse_formula('NH3')]    # deamination  assumes NH3+
     PTM["h"] = [parse_formula("O"), {}]    # hydroxylation (eg Prolines)
     PTM["+"] = [parse_formula("H"), {}]    # protonation
     PTM["o"] = [parse_formula("O"), {}]    # oxydation (eg methionine)
@@ -660,14 +671,35 @@ class Distribution(object):
         while self.distrib[-1].proba < self.threshold:      # high
             self.distrib.pop()
     #---------------- utilities --------------
-    def draw(self, charge=1, RP=10000, label=None):
+    def bar(self, largest=100, charge=1, label=None, color='g'):
         """
-        draw the distribution at a given charge and resolving power RP
+        draw the distribution as bars
         """
         masses = [ion.mass for ion in self.distrib ]
         probas = [ion.proba for ion in self.distrib]
-        m,y = spectrify(masses, probas, RP=RP)
-        plt.plot(m/charge, y, label=label)
+        pmax = max(probas)
+        ratio = largest/pmax
+        for m,p in zip(masses,probas):
+            plt.plot([m/charge,m/charge], [0, p*ratio], color, lw=0.8)
+        plt.plot([(masses[0]-0.5)/charge,(masses[-1]+0.5)/charge], [0, 0], color, lw=0.8, label=label)
+        plt.xlabel("$m/z$")
+        plt.ylabel("intensity")
+#        plt.axis(ymin=-5, ymax=105)
+    def spectrify(self, largest=100, RP=10000 ):
+        """
+        generate x,y to draw the distribution at a given resolving power RP
+        """
+        masses = [ion.mass for ion in self.distrib ]
+        probas = [ion.proba for ion in self.distrib]
+        m,y = spectrify(masses, probas, normalize=largest, RP=RP)
+        return (m,y)
+    def draw(self, largest=100, charge=1, RP=10000, label=None, color='g'):
+        """
+        draw the distribution at a given charge and resolving power RP
+        """
+        m,y = self.spectrify(largest=largest, RP=RP)
+        # m and y are nparray, so we can make arithmetics
+        plt.plot(m/charge, y, color, label=label)
         plt.xlabel("$m/z$")
         plt.ylabel("intensity")
 #        plt.axis(ymin=-5, ymax=105)
@@ -704,7 +736,7 @@ class Distribution(object):
         spl = self.enveloppe()
         xenv = np.linspace(self.distrib[0].mass-5, self.distrib[-1].mass+5, 1000)
         env = [100*spl(xi) for xi in xenv]
-        plt.plot((xenv+charge)/charge, env)
+        plt.plot(xenv/charge, env)
         if title:
             plt.title(title)
 
@@ -718,12 +750,13 @@ class Distribution(object):
         from scipy.interpolate import UnivariateSpline
         from scipy.optimize import newton
         from functools import partial
+        self.sort_by_mass()
         m0 = self.distrib[0].mass
-        x = [m0-1]
+        x = [m0-5]
         y = [0]
         x += [dd.mass for dd in self.distrib]
         y += [dd.proba for dd in self.distrib]
-        x += [self.distrib[0].mass+5]
+        x += [self.distrib[-1].mass+5]
         y += [0]
         x = np.array(x)
         y = np.array(y)
@@ -740,13 +773,6 @@ class Distribution(object):
         """
         return [ (ion.mass, ion.proba) for ion in self.distrib ]
 
-###################################
-# code for fine isotopic pattern
-# need to install neutronstar - from https://bitbucket.org/orserang/neutronstar.git
-# then enter in NS the location of the neutronstar binary code
-
-NS = "neutronstar/src/neutronstar"
-
 def fineisotopicdistrib(formula, length=1000, full_output=False):
     """
     compute a peak a list of all the peaks in a fine isotopic pattern.
@@ -755,6 +781,9 @@ def fineisotopicdistrib(formula, length=1000, full_output=False):
     else
         returns (D, coverage, processing_time_in_sec)
     where coverage is ratio of isotopes covered by D
+    
+    Do D.prune() on the returned distribution if you want to reduce the number of isotopes
+       to only those higher than D.threshold (default to isotope.THRESHOLD - usually 1E-8) 
 
     It uses the super fast "neutronstar" algorithm by Oliver Serang et al,
         https://dx.doi.org/10.1021/acs.analchem.0c01670
@@ -828,18 +857,18 @@ class Test(unittest.TestCase):
         pepPTM = "A*CaDmEnF-GhHoIK+"    #that's an heavy PTM !
         formPTM = parse_peptide(pepPTM)
         self.assertEqual(printformula(formPTM), "C_47 H_69 N_12 O_20 P S")
-        ubi = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
+        mH2 = parse_formula('H2').monoisotop()
         test1 = test[:103]
         test2 = test[103:]
         mt1 = monoisotop(parse_peptide(test1,ends="b"))
         mt2 = monoisotop(parse_peptide(test2,starts="y"))
-        self.assertEqual(mt1+mt2, monotest)
+        self.assertAlmostEqual(mt1+mt2, monotest+mH2)
         mt1 = monoisotop(parse_peptide(test1,ends="a"))
         mt2 = monoisotop(parse_peptide(test2,starts="x"))
-        self.assertEqual(mt1+mt2, monotest)
+        self.assertAlmostEqual(mt1+mt2, monotest)
         mt1 = monoisotop(parse_peptide(test1,ends="c"))
         mt2 = monoisotop(parse_peptide(test2,starts="z"))
-        self.assertEqual(mt1+mt2, monotest)
+        self.assertAlmostEqual(mt1+mt2, monotest+mH2)
 
     def test_insu(self):
         " test distribution on insuline convalent dimer "
@@ -852,49 +881,108 @@ class Test(unittest.TestCase):
         self.assertAlmostEqual(monoisotop(insuline), 5729.60086987, 8)
         Ins = Distribution(insuline)
         self.assertEqual(Ins.len(), 23)
-        ion22 = Ins.distrib[22]
+        ion10 = Ins.distrib[10]
         #print "Distribution"
         #print Ins
-        self.assertAlmostEqual(ion22.mass, 5751.657557659)
-        self.assertAlmostEqual(100*ion22.proba, 0.000003341)
+        self.assertAlmostEqual(ion10.mass, 5739.618326, 2)
+        self.assertAlmostEqual(100*ion10.proba, 3.86529, 4)
 
 # load table at import
-(elem_t, name_t, isotope_t ) = load_elements()
+def initialize():
+    global elem_t, name_t, isotope_t 
+    (elem_t, name_t, isotope_t ) = load_elements()
+
+initialize()
 import scipy.constants as cts
 m_e = cts.physical_constants['electron mass in u'][0]    # electron mass in u ~0.00054
 
-def demo():
+def demo0():
+    print("Handling molecular formula")
+    mol = "SH (CH2)11 (OCH2CH2)3 OCH2 COOH"
+    form = parse_formula( mol )    # Check
+    print("""
+Mol: {0}
+Formula: {1}
+Monoisotopic mass: {2:.6f}
+Average mass: {3:.3f}
+""".format(mol, form, form.monoisotop(), form.average()))
+
+def demo1():
+    print("Handling proteins")
     prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
     form = parse_peptide(prot)
-    print (form.average(), form.monoisotop())
+    print("Ubiquitin:", prot)
+    print("parsed as:",form)
+    print ("average mass: %.3f  monoisotopic mass: %.3f"%(form.average(), form.monoisotop()))
     D = form.distribution()
-    print ("By mass\n",D,"\n")
-    D.draw(charge=6, R=1E5, title="Ubiquitine 6+")
+    print ("Simplified Isotopic pattern:\n",D,"\n")
+    D.draw(charge=6, RP=70000)
     D.draw_lowres(charge=6)
-    plt.show()
-def demo2():
-    form1 = parse_peptide("CCCC")
-    D1 = form1.distribution()
-    form2 = parse_peptide("VVAVG")
-    D2 = form2.distribution()
-    somme = form1 + 2*form2 - 3*parse_formula("H2O")
-    print (form1.monoisotop(), form2.monoisotop(), somme.monoisotop())
-    D1.draw(label="CCCC")
-    D2.draw(label="VVAVG")
-    plt.legend()
+    plt.title("Ubiquitine 6+  RP=70k")
+
     plt.show()
 
-    
+def demo2():
+    print("molecular arithmetics")
+    form1 = parse_peptide("CCCC")
+    form2 = parse_peptide("VVAVG")
+    print("peptide P1: CCCC", form1)
+    print("peptide P2: VVAVG", form2)
+    # you can do formula arithmetics
+    somme = form1 + 2*form2 - 2*parse_formula("H2O")
+    print("ligation P2-P1-P2 - 2 H2O:", somme)
+    print ("monoisotopic masses P1: %.3f  P2: %.3f  ligation:: %.3f"%(form1.monoisotop(), form2.monoisotop(), somme.monoisotop()))
+
+def demo3():
+    print("fine isotopic pattern")
+    " test distribution on insuline covalent dimer "
+    cc = parse_peptide("GIVEQCCASVCSLYQLENYCN")
+    cd = parse_peptide("FVNQHLCGSHLVEALYLVCGERGFFYTPKA")
+    #print "Chain, C", monoisotop(cc)
+    #print "Chain, D", monoisotop(cd)
+    insuline = cc + cd - parse_formula("H6")    # remove 6 H for 3 disulfides
+
+    D1 = insuline.distribution()
+    try:
+        DD1 = fineisotopicdistrib(insuline)
+    except:
+        print("neutronstar utilities is not installed - check instructions")
+        exit()
+    # computing with neutronstar is very fast - drawing at high RP is slow !
+    plt.figure(1,figsize=(8,3))
+    D1.draw(RP=1E6, color='b', label="simplified pattern - RP=1E6")
+    DD1.draw(RP=1E6, color='r', label="fine pattern - RP=1E6")
+    DD1.bar(color='r')
+    plt.legend()
+    plt.title("comparing simple and detailled isotopic patterns for insuline")
+    plt.figure(2,figsize=(8,3))
+    for i,ion in enumerate([0,1,4,8]):
+        plt.subplot(1,4,i+1)
+        D1.draw(RP=1E6, color='b', label="ion %d"%ion)
+        DD1.draw(RP=1E6, color='r')
+        DD1.bar(color='r')
+        plt.legend()
+        plt.xlim(xmin=D1.distrib[ion].mass-0.03, xmax=D1.distrib[ion].mass+0.03)
+    plt.title("zooming on peaks")
+    plt.show()
+
+def demo4():
+    print("Not only organic chemistry !")
+    print("Isotopic distribution for Palladium:")
+    print(parse_formula('Pd').distribution())
+    print("monoisotopic mass of atoms is defined as the most naturally abundant, hence 106Pd here")
+    Pdalloy = "Au2 Ca10 Ga10 Pd76"
+    print("Palladium alloy:", Pdalloy)
+    alloy = parse(Pdalloy)
+    print("parsed formula",alloy)
+    print ("average mass: %.3f  monoisotopic mass: %.3f"%(alloy.average(), alloy.monoisotop()))
+
+    alloy.distribution().bar()
 
 if __name__ == '__main__':
-#    unittest.main()
-    #demo2()
-    form = parse_formula( "SH (CH2)11 (OCH2CH2)3 OCH2 COOH " )    # Check
-    print (form.average())
-    import time
-    t0 = time.time()
-    prot = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG" # ubiquitine
-    form = parse_peptide(prot)
-    D = form.distribution()
-    print ("Ubi : %.1f seconds"%( time.time()-t0))
-    print( D)
+    unittest.main()
+    # demo0()
+    # demo1()
+    # demo2()
+    # demo3()
+    # demo4()
