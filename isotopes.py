@@ -121,6 +121,8 @@ class Formula( defaultdict ):
         defaultdict.__init__(self,int)
     def __repr__(self):
         return printformula(self)
+    def _repr_html_(self):
+        return HTMLformula(self)
     def monoisotop(self):
         "return monoisotopique mass"
         return monoisotop(self)
@@ -130,6 +132,9 @@ class Formula( defaultdict ):
     def distribution(self):
         "return the mass distribution as a Distribution object"
         return Distribution(self)
+    def fineisotopicdistrib(self, length=1000):
+        "return the fine isotopic mass distribution as a Distribution object"
+        return fineisotopicdistrib(self, length=length, full_output=False)
     def __len__(self):
         return len(self.keys())
     def __imul__(self, other):
@@ -229,6 +234,7 @@ def load_elements(filename=None):
     name_t : {'H': 1,'He': 2,'Li': 3, ... is the reverse table name /Z 
     isotope_t : {1: (list, of, Isotope_objects), 2: ...    is the isotopic table
     """
+    import scipy.constants as cts   # used for electron mass
     #-------------------
     def readval(st):
         "0.9893(8) => float(0.9893)"
@@ -273,8 +279,25 @@ def load_elements(filename=None):
 #   to cure a bug in the algorithm
                         isotope_t[elem].append(Isotope(elem, isotop-1, float(isotop-1), 0.0))
                     isotope_t[elem].append(Isotope(elem, isotop, mass, abund))  # 
-            
+
+    # # add a few exotic
+    # # elem -1 is e- the electron
+    # elem = -1
+    # name_t["e-"] = elem
+    # m_e = cts.physical_constants['electron mass in u'][0]    # electron mass in u ~0.00054
+    # isotope_t[elem].append(Isotope(elem, 0, m_e, 1.0))
+
+    # # elem -2 is H+ the proton
+    # elem = -2
+    # name_t["H+"] = elem
+    # m_p = cts.physical_constants['proton mass in u'][0]    # proton mass in u
+    # m_d = cts.physical_constants['deuteron mass in u'][0]   
+    # isotope_t[elem].append(Isotope(elem, 1, m_p, isotope_t[1][0].abund))
+    # isotope_t[elem].append(Isotope(elem, 2, m_d, isotope_t[1][1].abund))
+
+    # reverse data base
     elem_t = dict(zip(name_t.values(), name_t.keys()))      # dict by element_number of name
+
     return (elem_t, name_t, isotope_t )
 
 def enrich(element="C",isotop=13, ratio=1.0):
@@ -417,24 +440,29 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
         - "a"  "b"  "c" - for MS fragments 
         -  or any formula
     
-    additional codes for Post Translational Modifications (PTM)
+    if extended is True, will also interpret U: Seleno-Cysteine and O: Pyrolysine
+
+    codes for Post Translational Modifications (PTM)
 
     * phosphorylation
     a acetylation
     n amidation
-    - deamidation
+    d deamidation
     h hydroxylation
     o oxydation
     + protonation
-    m methoxylation
+    - deprotonation
+    m methylation
     b beta-mercaptoethanol adduct
-    does not verify the chemical coherence of the PTM !
     
-    if extended is True, will also interpret U: Seleno-Cysteine and O: Pyrolysine
-    
+    Remarks
+    - the prgm does not verify the chemical coherence of the PTM !
+    - the PTM adds always the neutral form,
+    - you can have several PTM on the same residue.
+      for instance, n+ is an NH3+ amidation; Kmm is a dimethylated lysine, ACDEFGH+++ is the 3+ charged peptide
     
     """
-    if starts == "x":
+    if starts == "x": 
         formula = parse_formula("CONH")
     elif starts == "y":
         formula = parse_formula("NH3")  # shouldn't it be "NH" - no it seems, standard y ions are -NH3+ 
@@ -479,16 +507,17 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
         AA["O"] = parse_formula("CH (CH2)4 NH CO CH CH CH3 CH2 CH N")  # Pyrrolysine
     AAk = AA.keys()
     #PTM coded as a pair of formula [to_add, to_remove]
-    PTM = {}    
-    PTM["*"] = [parse_formula("PO4H2"), parse_formula("OH")]    # star notes phosphate
-    PTM["a"] = [parse_formula("COO CH3"), parse_formula("H2O")]    # c notes acetate
-    PTM["b"] = [parse_formula("SH CH2 CH2 OH"), parse_formula("H2")]    # b is for beta mercapto (on Cys)
-    PTM["n"] = [parse_formula("NH3"), parse_formula("OH")]    # amidation (in Cter) assumes NH3+
-    PTM["-"] = [parse_formula("OH"), parse_formula('NH3')]    # deamination  assumes NH3+
-    PTM["h"] = [parse_formula("O"), {}]    # hydroxylation (eg Prolines)
-    PTM["+"] = [parse_formula("H"), {}]    # protonation
-    PTM["o"] = [parse_formula("O"), {}]    # oxydation (eg methionine)
-    PTM["m"] = [parse_formula("CH2"), {}]    # methylation
+    PTM = {}
+    PTM["*"] = [parse_formula("H3PO4"),    parse_formula("H2O")]    #  phosphate
+    PTM["a"] = [parse_formula("CH3 COOH"), parse_formula("H2O")]    #  acetate
+    PTM["b"] = [parse_formula("SH CH2 CH2 OH"), parse_formula("H2")]    #  beta mercapto (on Cys)
+    PTM["n"] = [parse_formula("NH2"),      parse_formula("OH")]     # amidation (in Cter)
+    PTM["d"] = [parse_formula("OH"),       parse_formula('NH2')]    # deamination
+    PTM["h"] = [parse_formula("O"),        {}]                      # hydroxylation (eg Prolines)
+    PTM["+"] = [parse_formula("H"),        {}]                      # protonation
+    PTM["-"] = [{},                        parse_formula("H")]      # deprotonation
+    PTM["o"] = [parse_formula("O"),        {}]                      # oxydation (eg methionine)
+    PTM["m"] = [parse_formula("CH2"),      {}]                      # methylation
     PTMk = PTM.keys()
     for ires in range(len(st)):
         res = st[ires]
@@ -510,6 +539,7 @@ def parse_peptide(st, extended=False, starts="NH2", ends="COOH"):
     addformula(formula,cterm)
     return formula
 
+
 def rawformula(formula):
     "normalized print of a formula - needed for neutronstar"
     st =""
@@ -523,7 +553,7 @@ def rawformula(formula):
 
 def printformula(formula):
     "nice print of a formula"
-    st =""
+    st = []
     for k in sorted(formula.keys()):
         if formula[k] == 0:  # appears sometimes when doing formula arithmetics !
             continue
@@ -531,8 +561,20 @@ def printformula(formula):
             sto = "_%d"%(formula[k])
         else:
             sto = ""
-        st += "%s%s "%(k, sto)
-    return st.strip()
+        st.append("%s%s"%(k, sto))
+    return " ".join(st)
+def HTMLformula(formula):
+    "nice HTML of a formula"
+    st = []
+    for k in sorted(formula.keys()):
+        if formula[k] == 0:  # appears sometimes when doing formula arithmetics !
+            continue
+        if formula[k] >1:
+            sto = "<sub>%d</sub>"%(formula[k])
+        else:
+            sto = ""
+        st.append("%s%s"%(k, sto))
+    return " ".join(st)
 
 def monoisotop(formula):
     "returns monoisotopic mass from a formula"
@@ -894,8 +936,6 @@ def initialize():
     (elem_t, name_t, isotope_t ) = load_elements()
 
 initialize()
-import scipy.constants as cts
-m_e = cts.physical_constants['electron mass in u'][0]    # electron mass in u ~0.00054
 
 def demo0():
     print("Handling molecular formula")
