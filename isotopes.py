@@ -75,7 +75,8 @@ recursive descent chemical parser weakly inspired from
 Tim Peters tim_one@email.msn.com
 https://mail.python.org/pipermail/tutor/1999-March/000083.html
 
-code for fine isotopic pattern require the external neutronstar prgm - from https://bitbucket.org/orserang/neutronstar.git
+code for fine isotopic pattern is based on the external neutronstar prgm neutronstar
+from https://bitbucket.org/orserang/neutronstar.git
 
 The version 1.1 introduces the fast computation of fine isotopic pattern using the neutronstar algo.
 """
@@ -713,7 +714,7 @@ class Distribution(object):
         while self.distrib[-1].proba < self.threshold:      # high
             self.distrib.pop()
     #---------------- utilities --------------
-    def bar(self, largest=100, charge=1, label=None, color='g'):
+    def bar(self, largest=100, charge=1, label=None, color='green'):
         """
         draw the distribution as bars
         """
@@ -722,8 +723,8 @@ class Distribution(object):
         pmax = max(probas)
         ratio = largest/pmax
         for m,p in zip(masses,probas):
-            plt.plot([m/charge,m/charge], [0, p*ratio], color, lw=0.8)
-        plt.plot([(masses[0]-0.5)/charge,(masses[-1]+0.5)/charge], [0, 0], color, lw=0.8, label=label)
+            plt.plot([m/charge,m/charge], [0, p*ratio], color)
+        plt.plot([(masses[0]-0.5)/charge,(masses[-1]+0.5)/charge], [0, 0], color, label=label)
         plt.xlabel("$m/z$")
         plt.ylabel("intensity")
 #        plt.axis(ymin=-5, ymax=105)
@@ -735,14 +736,14 @@ class Distribution(object):
         probas = [ion.proba for ion in self.distrib]
         m,y = spectrify(masses, probas, normalize=largest, RP=RP)
         return (m,y)
-    def draw(self, largest=100, charge=1, RP=10000, label=None, color='g'):
+    def draw(self, largest=100, charge=1, RP=10000, label=None, color='green'):
         """
         draw the distribution at a given charge and resolving power RP
         """
         self.sort_by_mass()
         m,y = self.spectrify(largest=largest, RP=RP)
         # m and y are nparray, so we can make arithmetics
-        plt.plot(m/charge, y, color, label=label)
+        plt.plot(m/charge, y, color, label=label, lw=0.8)
         plt.xlabel("$m/z$")
         plt.ylabel("intensity")
 #        plt.axis(ymin=-5, ymax=105)
@@ -991,15 +992,15 @@ def demo3():
         exit()
     # computing with neutronstar is very fast - drawing at high RP is slow !
     plt.figure(1,figsize=(8,3))
-    D1.draw(RP=1E6, color='b', label="simplified pattern - RP=1E6")
+    D1.draw(RP=3E5, color='b', label="simplified pattern - RP=3E5")
     DD1.draw(RP=1E6, color='r', label="fine pattern - RP=1E6")
     DD1.bar(color='r')
     plt.legend()
     plt.title("comparing simple and detailled isotopic patterns for insuline")
     plt.figure(2,figsize=(8,3))
-    for i,ion in enumerate([0,1,4,8]):
+    for i,ion in enumerate([0,1,4,7]):
         plt.subplot(1,4,i+1)
-        D1.draw(RP=1E6, color='b', label="ion %d"%ion)
+        D1.draw(RP=3E5, color='b', label="ion %d"%ion)
         DD1.draw(RP=1E6, color='r')
         DD1.bar(color='r')
         plt.legend()
