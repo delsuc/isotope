@@ -9,7 +9,7 @@ import setuptools
 
 version = '1.1'        
 # get description
-with open("isotope/README.md", "r") as fh:
+with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
