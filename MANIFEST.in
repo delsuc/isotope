@@ -1,0 +1,4 @@
+# see https://docs.python.org/3/distutils/commandref.html#sdist-cmd
+recursive-include isotope  *.asc
+global-exclude .ipynb_checkpoints/*
+

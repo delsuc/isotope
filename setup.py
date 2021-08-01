@@ -7,7 +7,7 @@ setup.py
 """
 import setuptools
 
-version = '1.1'        
+version = '1.1'
 # get description
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -23,7 +23,6 @@ setuptools.setup(
     url="https://github.com/delsuc/isotope",
     packages=setuptools.find_packages(),
     include_package_data = True,
-    package_data={ "elements": ["elements.asc"]},
     license="CeCILL-2.1",
     provides=["isotope"],
     requires=["matplotlib", "numpy", 'scipy'],
